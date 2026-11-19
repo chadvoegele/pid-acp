@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="1080" viewBox="0 0 1260 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Shared runtime: contracts and state ownership</title>
+  <desc id="desc">Runtime owns process resources and conversation/server-keyed MCP clients; Session is non-owning. Creation commits a bijective UUID mapping, agent and conversation metadata atomically. Adapter maps native submission outcomes; EventBridge owns attachment presentation.</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#4b647d"/></marker></defs>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #19334d; }
+    .title { font-size: 27px; font-weight: bold; }
+    .heading { font-size: 20px; font-weight: bold; }
+    .body { font-size: 17px; }
+    .label { font-size: 16px; fill: #415b72; }
+    .flow { fill: none; stroke: #4b647d; stroke-width: 2; marker-end: url(#arrow); }
+  </style>
+  <rect width="1260" height="1080" fill="#f2f6fa"/>
+  <text class="title" x="30" y="45">Shared runtime: contracts and state ownership</text>
+  <text class="label" x="30" y="78">One pid-acp process · one shared execution engine · independent conversations A, B, C…</text>
+  <rect x="30" y="125" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="48" y="157">AcpServer</text>
+  <text class="body" x="48" y="189">adapters: Map&lt;string, Adapter&gt;</text>
+  <text class="body" x="48" y="215">opening: Set&lt;string&gt;</text>
+  <text class="body" x="48" y="241">Busy close leaves opens unaffected</text>
+  <rect x="450" y="125" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="468" y="157">Runtime</text>
+  <text class="body" x="468" y="189">createSession / loadSession</text>
+  <text class="body" x="468" y="215">One Harness + registry + backend</text>
+  <text class="body" x="468" y="241">Sandbox + MCP + failure + env cache</text>
+  <rect x="870" y="125" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="888" y="157">Session · attachment handle</text>
+  <text class="body" x="888" y="189">readonly id / conversation / harness</text>
+  <text class="body" x="888" y="215">Shared failure state</text>
+  <text class="body" x="888" y="241">close() releases attachment only</text>
+  <rect x="30" y="410" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="48" y="442">Adapter · per attached ID</text>
+  <text class="body" x="48" y="474">prompt / cancel / close</text>
+  <text class="body" x="48" y="500">Native submit / wait / scoped abort</text>
+  <text class="body" x="48" y="526">Order admission + abort calls only</text>
+  <rect x="450" y="410" width="360" height="170" rx="10" fill="#e5f1ec" stroke="#7c9bb4"/>
+  <text class="heading" x="468" y="442">Durable conversations / tasks</text>
+  <text class="body" x="468" y="474">Native ownerless execution state</text>
+  <text class="body" x="468" y="500">Transcript / pi.live / pi.inbox</text>
+  <text class="body" x="468" y="526">Resume or settle under native policy</text>
+  <rect x="870" y="410" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="888" y="442">EventBridge · presentation</text>
+  <text class="body" x="888" y="474">Entry high-water mark + pagination</text>
+  <text class="body" x="888" y="500">Attachment text blocks / tool IDs</text>
+  <text class="body" x="888" y="526">Context snapshot → serial watch</text>
+  <rect x="30" y="695" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="48" y="727">SessionStore / filesystem owner</text>
+  <text class="body" x="48" y="759">One backend, one stable owner.lock</text>
+  <text class="body" x="48" y="785">Private root/db JSONL</text>
+  <text class="body" x="48" y="811">Lock retained through env cleanup</text>
+  <rect x="450" y="695" width="360" height="170" rx="10" fill="#e5f1ec" stroke="#7c9bb4"/>
+  <text class="heading" x="468" y="727">Durable documents</text>
+  <text class="body" x="468" y="759">pi.agent: model / cwd / instructions</text>
+  <text class="body" x="468" y="785">conversation v1: UUID / skills</text>
+  <text class="body" x="468" y="811">sessions v1: UUID → native ID</text>
+  <rect x="870" y="695" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="888" y="727">NodeExecutionEnv per native ID</text>
+  <text class="body" x="888" y="759">Canonical cwd + native operations</text>
+  <text class="body" x="888" y="785">No cwd-keyed shared cleanup</text>
+  <text class="body" x="888" y="811">Runtime owns cleanup after join</text>
+  <path class="flow" d="M390 210 H450"/>
+  <text class="label" x="395" y="194">open</text>
+  <path class="flow" d="M810 210 H870"/>
+  <text class="label" x="817" y="194">return</text>
+  <path class="flow" d="M210 295 V410"/>
+  <text class="label" x="223" y="356">owns</text>
+  <path class="flow" d="M630 295 V410"/>
+  <text class="label" x="643" y="356">owns</text>
+  <path class="flow" d="M390 495 H450"/>
+  <text class="label" x="397" y="479">submit</text>
+  <path class="flow" d="M810 495 H870"/>
+  <text class="label" x="817" y="479">observe</text>
+  <path class="flow" d="M500 295 V345 H15 V780 H30"/>
+  <text class="label" x="58" y="655">Runtime owns backend + namespace lock</text>
+  <path class="flow" d="M630 580 V695"/>
+  <text class="label" x="643" y="649">persists</text>
+  <path class="flow" d="M810 555 H840 V780 H870"/>
+  <text class="label" x="846" y="672">env</text>
+  <rect x="30" y="885" width="1200" height="65" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="48" y="911">McpAdapter · Map&lt;conversation ID, Map&lt;server, connection&gt;&gt;</text>
+  <text class="body" x="48" y="938">Temporary startup discovery → fixed registry closures · pi-mcp owns clients · native environments prepare execution</text>
+  <path class="flow" d="M15 780 V915 H30"/>
+  <path class="flow" d="M800 580 V615 H1250 V915 H1230"/>
+  <text class="label" x="30" y="965">Creation transaction: agent + canonical cwd + saved skills + bijective external UUID mapping.</text>
+  <text class="label" x="30" y="993">Saved skills and environment/MCP ownership use native conversation IDs; MCP availability uses current discovery.</text>
+  <text class="label" x="30" y="1021">Submission.wait → response; independent watch → notifications. Cancel captures only the pending send.</text>
+  <text class="label" x="30" y="1049">Accepted close stops admission synchronously; Runtime closes native state once, including unattached work.</text>
+</svg>

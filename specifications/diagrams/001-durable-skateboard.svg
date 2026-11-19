@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1260" viewBox="0 0 1400 1260" role="img" aria-labelledby="title desc">
+  <title id="title">Original plan: replace Pi RPC, retain ACP</title>
+  <desc id="desc">Planning context, not the implemented architecture. The original Pi RPC chain reads left to right. The milestone-one replacement reads top to bottom from ACP client to adapter to an in-memory Durable harness, then branches downward to model calls, memory storage and local bash execution. Shell execution continues downward to child processes.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#4b647d"/></marker>
+  </defs>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #19334d; }
+    .title { font-size: 28px; font-weight: bold; }
+    .heading { font-size: 20px; font-weight: bold; }
+    .body { font-size: 17px; }
+    .label { font-size: 15px; fill: #415b72; }
+    .box { stroke: #7c9bb4; stroke-width: 1.5; }
+    .flow { fill: none; stroke: #4b647d; stroke-width: 2; marker-end: url(#arrow); }
+  </style>
+  <rect width="1400" height="1260" fill="#f2f6fa"/>
+  <text class="title" x="40" y="48">Original plan: replace Pi RPC, retain ACP</text>
+  <text class="label" x="40" y="80">Planning context · milestone one only; see docs/architecture.svg for the implemented persistent runtime.</text>
+  <text class="heading" x="40" y="125">BEFORE · Pi RPC subprocess per session</text>
+  <rect class="box" x="40" y="155" width="350" height="105" rx="10" fill="#fff"/>
+  <text class="heading" x="58" y="187">ACP client</text>
+  <text class="body" x="58" y="217">Zed / other client</text>
+  <rect class="box" x="525" y="155" width="350" height="105" rx="10" fill="#fff"/>
+  <text class="heading" x="543" y="187">pi-acp process</text>
+  <text class="body" x="543" y="217">ACP ↔ Pi RPC translation</text>
+  <rect class="box" x="1010" y="155" width="350" height="105" rx="10" fill="#fff6e4"/>
+  <text class="heading" x="1028" y="187">Pi process per session</text>
+  <text class="body" x="1028" y="217">pi --mode rpc</text>
+  <path class="flow" d="M390 208 H525"/>
+  <text class="label" x="410" y="192">ACP / stdio</text>
+  <path class="flow" d="M875 208 H1010"/>
+  <text class="label" x="888" y="192">Pi RPC / stdio</text>
+  <text class="heading" x="40" y="310">MILESTONE ONE · one application process, no Pi RPC bridge</text>
+  <path d="M20 470 H1380 V1050 H480 V870 H20 Z" fill="#e5eef7" stroke="#9cb4cb" stroke-dasharray="7 5"/>
+  <text class="label" x="40" y="500">pid-acp process · embedded SDK, not a separate daemon</text>
+  <rect class="box" x="500" y="345" width="400" height="95" rx="10" fill="#fff"/>
+  <text class="heading" x="518" y="377">ACP client</text>
+  <text class="body" x="518" y="407">Protocol unchanged</text>
+  <rect class="box" x="500" y="520" width="400" height="100" rx="10" fill="#fff"/>
+  <text class="heading" x="518" y="552">ACP adapter</text>
+  <text class="body" x="518" y="582">requests → SDK calls; events → ACP updates</text>
+  <path class="flow" d="M700 440 V520"/>
+  <text class="label" x="714" y="488">ACP / stdio</text>
+  <rect class="box" x="500" y="675" width="400" height="145" rx="10" fill="#fff"/>
+  <text class="heading" x="518" y="707">Pi Durable harness</text>
+  <text class="body" x="518" y="737">one conversation · model turns · tool tasks</text>
+  <text class="body" x="518" y="762">submit · stream events · abort</text>
+  <text class="body" x="518" y="787">in-memory storage; no restart recovery</text>
+  <path class="flow" d="M700 620 V675"/>
+  <text class="label" x="714" y="655">SDK calls</text>
+  <rect class="box" x="40" y="920" width="400" height="100" rx="10" fill="#fff6e4"/>
+  <text class="heading" x="58" y="952">Model provider API</text>
+  <text class="body" x="58" y="982">Explicit provider credentials</text>
+  <rect class="box" x="500" y="920" width="400" height="100" rx="10" fill="#fff"/>
+  <text class="heading" x="518" y="952">MemoryStorage</text>
+  <text class="body" x="518" y="982">No restart recovery in milestone one</text>
+  <rect class="box" x="960" y="920" width="400" height="100" rx="10" fill="#e5f1ec"/>
+  <text class="heading" x="978" y="952">bash / NodeExecutionEnv</text>
+  <text class="body" x="978" y="982">Session cwd · unrestricted local user</text>
+  <path class="flow" d="M580 820 V885 H240 V920"/>
+  <text class="label" x="258" y="906">model calls</text>
+  <path class="flow" d="M700 820 V920"/>
+  <text class="label" x="714" y="896">native state</text>
+  <path class="flow" d="M820 820 V885 H1160 V920"/>
+  <text class="label" x="1030" y="875">tool execution</text>
+  <rect class="box" x="960" y="1110" width="400" height="95" rx="10" fill="#fff6e4"/>
+  <text class="heading" x="978" y="1142">Shell child processes</text>
+  <text class="body" x="978" y="1172">Expected; not a separate agent host</text>
+  <path class="flow" d="M1160 1020 V1110"/>
+  <text class="label" x="1174" y="1083">spawn / kill</text>
+  <text class="label" x="40" y="1188">Acceptance: initialize → new → prompt → pwd tool → streamed answer; then cancel.</text>
+  <text class="label" x="40" y="1232">Originally deferred: persistent / multi-session hosting, background reports, MCP and codemode.</text>
+</svg>

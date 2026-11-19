@@ -1,0 +1,50 @@
+{
+	"name": "pid-acp",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"bin": {
+		"pid-acp": "dist/main.js"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
+		"lint": "biome lint src tests",
+		"format": "biome format --write .",
+		"format:check": "biome format .",
+		"test": "npm run test:unit && npm run test:integration && npm run test:e2e",
+		"test:unit": "node --test tests/test_*.unit.ts",
+		"test:integration": "node --test tests/test_*.integration.ts",
+		"test:e2e": "node --test tests/test_startup_configuration.e2e.ts tests/test_socket_transport.e2e.ts tests/test_cancellation_recovery.e2e.ts tests/test_shutdown_cleanup.e2e.ts tests/test_provider_tool_round_trip.e2e.ts tests/test_codemode.e2e.ts tests/test_file_tools.e2e.ts tests/test_persistence.e2e.ts tests/test_persistence_recovery.e2e.ts tests/test_persistence_conversations.e2e.ts tests/test_mcp.e2e.ts tests/test_user_extensions_todo.e2e.ts tests/test_user_extensions_recovery.e2e.ts",
+		"test:live": "node tests/test_live_tool_cancellation_lifecycle.e2e.ts && npm run test:live:files && npm run test:live:resources && npm run test:live:conversations",
+		"test:live:codemode": "node tests/test_live_codemode.e2e.ts",
+		"test:live:mcp": "node tests/test_live_mcp.e2e.ts",
+		"test:live:files": "node tests/test_live_file_tools.e2e.ts",
+		"test:live:resources": "node tests/test_live_resources.e2e.ts",
+		"test:live:steering": "node tests/test_live_steering.e2e.ts",
+		"test:live:thinking": "node tests/test_live_thinking.e2e.ts",
+		"test:live:conversations": "node --test tests/test_live_multiple_conversations.e2e.ts",
+		"test:live:external": "node tests/test_live_acpx_tool_cancellation.e2e.ts",
+		"test:external:persistence": "node --test tests/test_acpx_persistence.e2e.ts",
+		"test:live:external:persistence": "node --test tests/test_live_acpx_persistence.e2e.ts"
+	},
+	"dependencies": {
+		"@agentclientprotocol/sdk": "2.0.1",
+		"@earendil-works/chord": "1.5.2",
+		"@earendil-works/pi-ai": "1.5.2",
+		"@earendil-works/pi-codemode": "1.5.2",
+		"@earendil-works/pi-durable": "1.5.2",
+		"@earendil-works/pi-mcp": "1.5.2",
+		"@earendil-works/pi-schema": "1.5.2",
+		"fs-native-extensions": "1.5.2",
+		"yaml": "2.9.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.8",
+		"@types/node": "26.0.0",
+		"typescript": "6.0.2"
+	}
+}
