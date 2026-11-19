@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="1080" viewBox="0 0 1260 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Shared runtime: execution and presentation</title>
+  <desc id="desc">ACP stdio routes IDs to independent adapters and native conversations. Runtime owns one shared Harness, storage, sandbox and environments. Its async registry factory discovers MCP through temporary launch-cwd clients before Harness opens; native environments prepare conversation-keyed execution clients. Optional presentation never gates recovery or submission completion.</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#4b647d"/></marker></defs>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #19334d; }
+    .title { font-size: 27px; font-weight: bold; }
+    .heading { font-size: 20px; font-weight: bold; }
+    .body { font-size: 17px; }
+    .label { font-size: 16px; fill: #415b72; }
+    .flow { fill: none; stroke: #4b647d; stroke-width: 2; marker-end: url(#arrow); }
+  </style>
+  <rect width="1260" height="1080" fill="#f2f6fa"/>
+  <text class="title" x="30" y="45">Shared runtime: execution and presentation</text>
+  <text class="label" x="30" y="78">One pid-acp process · one shared execution engine · independent conversations A, B, C…</text>
+  <rect x="30" y="125" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="48" y="157">ACP client / stdio host</text>
+  <text class="body" x="48" y="189">ACP-only stdin/stdout transport</text>
+  <text class="body" x="48" y="215">EOF / signals / fatal shutdown</text>
+  <text class="body" x="48" y="241">Stop transport admission first</text>
+  <rect x="450" y="125" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="468" y="157">AcpServer · session router</text>
+  <text class="body" x="468" y="189">Map&lt;external UUID, Adapter&gt;</text>
+  <text class="body" x="468" y="215">Per-ID opening reservations</text>
+  <text class="body" x="468" y="241">new / load / prompt / cancel</text>
+  <rect x="870" y="125" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="888" y="157">Adapters + Sessions A, B…</text>
+  <text class="body" x="888" y="189">Non-owning native attachments</text>
+  <text class="body" x="888" y="215">Native admission + terminal outcomes</text>
+  <text class="body" x="888" y="241">Cancel only mapped conversation</text>
+  <rect x="30" y="410" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="48" y="442">Runtime · process owner</text>
+  <text class="body" x="48" y="474">Registry / Harness / backend / sandbox</text>
+  <text class="body" x="48" y="500">Resume native work at startup</text>
+  <text class="body" x="48" y="526">Recovery needs no attached client</text>
+  <rect x="450" y="410" width="360" height="170" rx="10" fill="#e5f1ec" stroke="#7c9bb4"/>
+  <text class="heading" x="468" y="442">Shared Durable Harness</text>
+  <text class="body" x="468" y="474">Ownerless conversations A, B, C…</text>
+  <text class="body" x="468" y="500">Native submissions / tasks / history</text>
+  <text class="body" x="468" y="526">Concurrent provider and tool calls</text>
+  <rect x="870" y="410" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="888" y="442">Optional EventBridge delivery</text>
+  <text class="body" x="888" y="474">Attachment text + tool state</text>
+  <text class="body" x="888" y="500">Context replay, then watch updates</text>
+  <text class="body" x="888" y="526">Page persisted gaps; sink may fail</text>
+  <rect x="30" y="695" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="48" y="727">Conversation environments</text>
+  <text class="body" x="48" y="759">Promise cache by conversation ID</text>
+  <text class="body" x="48" y="785">Canonical cwd from native agent</text>
+  <text class="body" x="48" y="811">Distinct owners even for equal cwd</text>
+  <rect x="450" y="695" width="360" height="170" rx="10" fill="#e5f1ec" stroke="#7c9bb4"/>
+  <text class="heading" x="468" y="727">Shared Durable Storage</text>
+  <text class="body" x="468" y="759">MemoryStorage OR db JSONL</text>
+  <text class="body" x="468" y="785">Agent + metadata + UUID mapping</text>
+  <text class="body" x="468" y="811">Atomic createConversation commit</text>
+  <rect x="870" y="695" width="360" height="170" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="888" y="727">Native tools / host filesystem</text>
+  <text class="body" x="888" y="759">bash / read / edit / write / codemode</text>
+  <text class="body" x="888" y="785">Native calls keep host permissions</text>
+  <text class="body" x="888" y="811">Shared files can race</text>
+  <path class="flow" d="M390 210 H450"/>
+  <text class="label" x="395" y="194">route</text>
+  <path class="flow" d="M810 210 H870"/>
+  <text class="label" x="817" y="194">attach</text>
+  <path class="flow" d="M1030 295 V345 H670 V410"/>
+  <text class="label" x="685" y="368">submit / abort</text>
+  <path class="flow" d="M390 465 H450"/>
+  <text class="label" x="397" y="448">owns</text>
+  <path class="flow" d="M630 580 V695"/>
+  <text class="label" x="643" y="649">commits</text>
+  <path class="flow" d="M810 495 H870"/>
+  <text class="label" x="817" y="479">watch</text>
+  <path class="flow" d="M210 580 V695"/>
+  <text class="label" x="223" y="649">owns</text>
+  <path class="flow" d="M390 780 H410 V650 H1050 V695"/>
+  <text class="label" x="700" y="636">conversation-scoped execution</text>
+  <path class="flow" d="M570 410 V320 H960 V295"/>
+  <text class="label" x="585" y="314">Submission.wait → ACP response</text>
+  <path class="flow" d="M1230 460 H1245 V100 H210 V125"/>
+  <text class="label" x="415" y="117">Ordered notifications continue after prompt responses</text>
+  <rect x="30" y="885" width="1200" height="65" rx="10" fill="#fff" stroke="#7c9bb4"/>
+  <text class="heading" x="48" y="911">Runtime: discover → registry + codemode once → Harness; env → execution clients</text>
+  <text class="body" x="48" y="938">Prepared clients → pi-mcp stdio / HTTP → servers. Stable tools/connections; no hot reload or automatic reconnect.</text>
+  <path class="flow" d="M30 500 H15 V915 H30"/>
+  <path class="flow" d="M700 580 V610 H1250 V915 H1230"/>
+  <text class="label" x="30" y="965">Load attaches presentation; startup resumes native work before any load or fresh input.</text>
+  <text class="label" x="30" y="993">Attachment close stops delivery, never execution. Sink failure never becomes a user abort.</text>
+  <text class="label" x="30" y="1021">Shutdown: join native work → close MCP clients → close sandbox → clean environments → release namespace lock.</text>
+  <text class="label" x="30" y="1049">Trusted single-user storage: startup lock held until shutdown; no heartbeat or live-file monitoring.</text>
+</svg>
