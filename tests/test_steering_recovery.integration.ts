@@ -76,13 +76,6 @@ test("ACP load steers recovered work without a prompt and isolates idle siblings
 		cwd: f.cwd,
 		mcpServers: [],
 	});
-	await assert.rejects(
-		agent.request("session/prompt", {
-			sessionId: a.id,
-			prompt: [{ type: "text", text: "busy" }],
-		}),
-		/already active/,
-	);
 	assert.deepEqual(
 		await agent.request("_session/steering", {
 			sessionId: b.id,

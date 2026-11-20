@@ -115,7 +115,7 @@ requirements; the user has explicitly approved always-on recovery.
 ## Non-goals
 
 - Separate Harnesses, processes or execution engines per ACP session.
-- Steering, queued follow-ups or overlapping prompts within one conversation.
+- Parallel execution of turns within one conversation.
 - Multi-user tenancy, filesystem isolation, permissions or container provisioning.
 - Conversation listing, deletion, forking, new background-agent workflows, session
   switching, automatic last-session selection or a new ACP detach/close extension.
@@ -223,10 +223,8 @@ additional-directory rejection and capability advertisements remain unchanged.
   to an attached ID, never implicitly load a saved conversation. Invalid cancel
   notifications must have no execution side effects; diagnostics must stay off stdout.
 - Durable decides admission; notification backlog must never make execution busy.
-  Recovered work can be busy without an Adapter; a new prompt must fail busy while that
-  conversation's native work remains active, rather than queue behind it.
-  Same-conversation overlap must fail promptly without insertion into Durable's
-  inbox; submissions must use `whenBusy: "reject"`. Different conversations'
+  Prompts submitted during active work, including recovered or agent-initiated
+  turns, enter Durable's inbox via `whenBusy: "followUp"`. Different conversations'
   provider/tool executions must be able to overlap; neither a
   global prompt mutex nor a global recovery wait is permitted.
 
@@ -350,9 +348,8 @@ host resources. Conversations using the same files may race; pid-acp must not
 promise conflict resolution or rollback of external effects. Unsafe native tool
 replay, surviving shell children after hard crashes and lack of exactly-once
 effects remain as described in 004. Shared provider quotas, CPU, memory, disk and
-transport backpressure may affect all conversations. Limits must reject excess
-admission explicitly rather than silently queue same-conversation prompts; they
-must permit at least two concurrent conversations. Exact limits remain open.
+transport backpressure may affect all conversations. Admission limits must permit
+at least two concurrent conversations. Exact limits remain open.
 
 ## Compatibility
 
@@ -377,8 +374,8 @@ production ACP tests, with provider injection and real native bash/file tools:
 
 1. Assert one Harness open/close and one backend across two new sessions; distinct
    UUIDs map to distinct native conversations with no reserved-root reuse.
-2. Use barriers to prove A and B run providers/tools concurrently. Reject a second
-   A prompt without queuing it while B completes. Test concurrent new/load,
+2. Use barriers to prove A and B run providers/tools concurrently. Verify a second
+   A prompt queues for the next turn. Test concurrent new/load,
    duplicate load, opening-ID requests, stale IDs and failed-publication rollback.
 3. Give A/B distinct cwd, instructions, skill catalogs and agent choices; verify
    model requests, relative file effects and history contain only their own data.
@@ -386,8 +383,8 @@ production ACP tests, with provider injection and real native bash/file tools:
    and global event-correlation bugs. Check all update session IDs.
 4. Attach to recovering A and cancel without a fresh prompt; also cancel during
    submission and real long-running bash. B must finish and accept another prompt.
-   Reject fresh input while A is recovering without inserting it; a late cancel
-   must not affect its next prompt. Idle/unknown cancel must have no abort effects.
+   Queue fresh input while A is recovering; a late cancel must not affect its
+   next prompt. Idle/unknown cancel must have no abort effects.
 5. Restart with unfinished A/B/C and no ACP load or prompt. Assert automatic shared
    recovery, including B/C remaining unattached. Load A while recovery runs: replay
    its snapshot before the load response and deliver subsequent attached updates

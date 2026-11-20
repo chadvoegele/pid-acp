@@ -80,10 +80,6 @@ async function runAttempt(attempt: number) {
 		const steering = await steer(steeringUpdateText);
 		checks.push({ check: "native-steering-admission", result: steering });
 		assert.deepEqual(steering, { outcome: "injected" });
-		await assert.rejects(
-			client.prompt("This overlapping ordinary prompt must be rejected."),
-			/already active/i,
-		);
 		let completed = false;
 		void prompt.then(() => {
 			completed = true;

@@ -169,7 +169,7 @@ export class Adapter {
 			const submission = await this.order(async () => {
 				await this.requireAdmission(sessionId);
 				return this.session.conversation.submit(
-					{ type: "input", content, whenBusy: "reject" },
+					{ type: "input", content, whenBusy: "followUp" },
 					context,
 				);
 			});

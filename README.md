@@ -30,7 +30,7 @@ PID_ACP_PROVIDER_CONFIG="provider.ts" node dist/main.js
 | `initialize` | None |
 | `session/new` | `harness.createConversation()`, then `conversation.watch()` |
 | `session/load` | `harness.snapshot()` and `harness.conversation()`, then `conversation.context()` and `conversation.watch()` |
-| `session/prompt` | `conversation.submit({ type: "input", content, whenBusy: "reject" }, context)`, then `submission.wait()` |
+| `session/prompt` | `conversation.submit({ type: "input", content, whenBusy: "followUp" }, context)`, then `submission.wait()` |
 | `session/cancel` (notification) | `conversation.abort()` |
 | `_session/steering` | `conversation.submit({ type: "input", content, whenBusy: "steer", whenIdle: "reject" }, context)` |
 
