@@ -203,10 +203,6 @@ test("production ACP runs independent sessions concurrently and cancel leaves it
 		a.sessionId,
 	);
 	await waitFor(() => existsSync(join(f.cwd, "a.pid")));
-	await assert.rejects(
-		host.prompt("DO_NOT_QUEUE", a.sessionId),
-		/already active/,
-	);
 	assert.equal(
 		(
 			await host.prompt(

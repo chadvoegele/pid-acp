@@ -112,7 +112,7 @@ test("slow tool sink does not gate submission; terminal and final message arrive
 	assert.match(JSON.stringify(updates[terminal]), /lifecycle-output/);
 });
 
-test("first submission returns while queued native input runs; queued and passive output need no new ACP prompt", {
+test("overlapping ACP prompt waits for its own turn while passive output needs no ACP prompt", {
 	timeout: 5000,
 }, async (t) => {
 	const firstStarted = Promise.withResolvers<void>();
@@ -143,17 +143,17 @@ test("first submission returns while queued native input runs; queued and passiv
 	});
 	const first = prompt("first input");
 	await firstStarted.promise;
-	await assert.rejects(prompt("overlap"), /already active/);
-	const queued = await session.conversation.submit(
-		{ type: "input", content: "queued input", whenBusy: "followUp" },
-		context,
-	);
+	let queuedReturned = false;
+	const queued = prompt("queued input").then((result) => {
+		queuedReturned = true;
+		return result;
+	});
 	releaseFirst.resolve();
 	await secondStarted.promise;
 	assert.equal((await first).stopReason, "end_turn");
-	assert.equal((await queued.status(context)).status, "placed");
+	assert.equal(queuedReturned, false);
 	releaseSecond.resolve();
-	assert.equal((await queued.wait(context)).status, "done");
+	assert.equal((await queued).stopReason, "end_turn");
 	await session.conversation.submit(
 		{
 			type: "write",

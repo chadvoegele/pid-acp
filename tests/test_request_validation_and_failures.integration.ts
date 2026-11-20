@@ -66,7 +66,6 @@ test("explicit errors, creation races, overlap, provider failure and failed shel
 		);
 		const blocked = client.prompt("model-block", sessionId);
 		await new Promise((resolve) => setTimeout(resolve, 100));
-		await assert.rejects(client.prompt("hello", sessionId), /already active/);
 		const independent = await create(cwd);
 		assert.equal(
 			(await client.prompt("independent", independent.sessionId)).stopReason,

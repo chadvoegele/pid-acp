@@ -247,10 +247,6 @@ Never read the environment or unrelated files.
 		}),
 	);
 	for (const pid of overlapPids) process.kill(pid, 0);
-	await assert.rejects(
-		client.prompt("Reply OVERLAP without tools.", a.id),
-		/busy|active|progress/i,
-	);
 	const cancelStarted = Date.now();
 	await client.cancel(a.id);
 	assert.equal((await pending[0]).stopReason, "cancelled");
@@ -409,7 +405,6 @@ Never read the environment or unrelated files.
 			overlappingRealShells: 3,
 			cancelMs,
 			siblingCancellationIsolation: true,
-			sameConversationOverlapRejected: true,
 			unattachedRecoveryBeforeLoad: 2,
 			effectsPerRecoveredConversation: 1,
 			replayAndContinuedPrompt: true,

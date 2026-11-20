@@ -166,13 +166,13 @@ repeating history as live output.
 Releasing an attached but dormant session must close it without calling abort
 or disposing process-owned execution resources.
 
-Durable's atomic `whenBusy: "reject"` admission rejects fresh input during native
-work without queuing or waiting for idle. An Adapter orders admission and explicit
+Durable's `whenBusy: "followUp"` admission queues fresh input during native
+work for the next turn. An Adapter orders admission and explicit
 native abort calls only to protect concurrent cancellation. A prompt response maps
 its submission.wait terminal result, independently of delivery and later work.
 One attachment watch continues after responses; clients wait for particular output
 when needed. Delivery backlog alone never makes execution busy. The original input
-is never resubmitted; genuine native overlap fails explicitly.
+is never resubmitted.
 
 With the fixed built-in registry, `harness.inspect()` identifies this conversation's
 tasks blocked by missing/incompatible definitions before submission. It does not

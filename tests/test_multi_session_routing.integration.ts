@@ -181,7 +181,6 @@ for (const equalCwd of [false, true]) {
 			});
 		const pending = [prompt(a.sessionId, "A"), prompt(b.sessionId, "B")];
 		await both.promise;
-		await assert.rejects(prompt(a.sessionId, "DO_NOT_QUEUE"), /already active/);
 		assert.ok(
 			(await Promise.all(pending)).every(
 				(result) => result.stopReason === "end_turn",
@@ -274,18 +273,6 @@ test("attached recovered A can cancel without a new prompt while B completes and
 	const abortB = t.mock.method(b.conversation, "abort");
 	const prompt = (target: Adapter, sessionId: string, text: string) =>
 		target.prompt(sessionId, text);
-	await assert.rejects(prompt(adapter, a.id, "DO_NOT_QUEUE"), /already active/);
-	// Race the authoritative native rejection, even if the preceding inspection was idle.
-	const inspect = a.harness.inspect.bind(a.harness);
-	t.mock.method(
-		a.harness,
-		"inspect",
-		async (...args: Parameters<typeof inspect>) => ({
-			...(await inspect(...args)),
-			tasks: [],
-		}),
-		{ times: 1 },
-	);
 	const entering = Promise.withResolvers<void>();
 	const releaseAdmission = Promise.withResolvers<void>();
 	t.after(() => releaseAdmission.resolve());
@@ -300,19 +287,16 @@ test("attached recovered A can cancel without a new prompt while B completes and
 		},
 		{ times: 1 },
 	);
-	const rejected = assert.rejects(
-		prompt(adapter, a.id, "ALSO_DO_NOT_QUEUE"),
-		/already active/,
-	);
+	const queued = prompt(adapter, a.id, "queued for cancellation");
 	await entering.promise;
 	const racingCancel = adapter.cancel(a.id);
 	releaseAdmission.resolve();
-	await rejected;
 	await racingCancel;
+	assert.equal((await queued).stopReason, "cancelled");
 	assert.equal(
 		abortA.mock.callCount(),
 		1,
-		"session cancellation targets recovered work even when fresh admission rejects",
+		"session cancellation targets recovered work and queued input",
 	);
 	assert.equal((await prompt(sibling, b.id, "B")).stopReason, "end_turn");
 	await adapter.cancel(a.id);
@@ -324,7 +308,9 @@ test("attached recovered A can cancel without a new prompt while B completes and
 	await adapter.cancel(a.id);
 	assert.equal(abortA.mock.callCount(), 1, "idle cancellation must not abort");
 	const history = await a.conversation.context(context);
-	assert.ok(!JSON.stringify(history.messages).includes("DO_NOT_QUEUE"));
+	assert.ok(
+		!JSON.stringify(history.messages).includes("queued for cancellation"),
+	);
 });
 
 for (const settleBeforeWatch of [false, true]) {

@@ -214,13 +214,6 @@ test("steering a running ACP turn returns before generation and uses the ordinar
 		prompt: [{ type: "text", text: "start" }],
 	});
 	await entered.promise;
-	await assert.rejects(
-		agent.request("session/prompt", {
-			sessionId,
-			prompt: [{ type: "text", text: "overlap" }],
-		}),
-		/already active/,
-	);
 	assert.deepEqual(
 		await agent.request("_session/steering", {
 			...steering(sessionId, "steer now", true),
