@@ -42,7 +42,7 @@ async function startHost(
 	const log = join(fixture.root, `${phase}.jsonl`);
 	const client = await fixture.client({
 		PID_ACP_EXTENSIONS: JSON.stringify(extensionPaths),
-		PID_ACP_PROVIDER_CONFIG: fileURLToPath(
+		PID_ACP_PROVIDERS: fileURLToPath(
 			new URL("./helpers/todo-provider.ts", import.meta.url),
 		),
 		PID_TEST_TODO_REQUEST_LOG: log,

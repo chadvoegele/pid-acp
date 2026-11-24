@@ -86,9 +86,7 @@ export async function acpxFixture(t: TestContext, live = false) {
 					PID_ACP_SKILLS_DIR: "",
 					PID_ACP_THINKING: "off",
 					...(!live && {
-						PID_ACP_PROVIDER_CONFIG: resolve(
-							"tests/helpers/persistence-provider.ts",
-						),
+						PID_ACP_PROVIDERS: resolve("tests/helpers/persistence-provider.ts"),
 						PID_ACP_MODEL: "faux-1",
 					}),
 					PID_ACP_SESSIONS_DIR: sessions,

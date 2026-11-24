@@ -38,7 +38,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		throw new Error(
 			"PID_ACP_SESSIONS_DIR must be a nonempty absolute directory.",
 		);
-	const providerPaths = parseProviderPaths(env.PID_ACP_PROVIDER_CONFIG);
+	const providerPaths = parseProviderPaths(env.PID_ACP_PROVIDERS);
 	if (!env.PID_ACP_MODEL?.trim())
 		throw new ModelConfigurationError(
 			"Set PID_ACP_MODEL to a literal chat model ID.",
@@ -87,12 +87,12 @@ function parseProviderPaths(value: string | undefined): readonly string[] {
 	}
 	if (!Array.isArray(paths) || paths.length === 0)
 		throw new ModelConfigurationError(
-			"Set PID_ACP_PROVIDER_CONFIG to an absolute provider module path or a nonempty JSON array of absolute paths.",
+			"Set PID_ACP_PROVIDERS to an absolute provider module path or a nonempty JSON array of absolute paths.",
 		);
 	return paths.map((path: unknown, index) => {
 		if (typeof path !== "string" || !isAbsolute(path))
 			throw new ModelConfigurationError(
-				`PID_ACP_PROVIDER_CONFIG entry ${index + 1}: Use an absolute provider module path.`,
+				`PID_ACP_PROVIDERS entry ${index + 1}: Use an absolute provider module path.`,
 			);
 		return path;
 	});
@@ -175,7 +175,7 @@ export async function configureModels({
 			models.setProvider(provider);
 		} catch {
 			throw new ModelConfigurationError(
-				`PID_ACP_PROVIDER_CONFIG entry ${index + 1}: Could not load or register provider. Check that the module exists, loads successfully, and default-exports a Pi AI Provider.`,
+				`PID_ACP_PROVIDERS entry ${index + 1}: Could not load or register provider. Check that the module exists, loads successfully, and default-exports a Pi AI Provider.`,
 			);
 		}
 	}
@@ -197,7 +197,7 @@ function resolveDefaultModel(
 		);
 	if (!models.getProvider(provider))
 		throw new ModelConfigurationError(
-			"PID_ACP_PROVIDER is not registered. Set it to the ID of a provider loaded by PID_ACP_PROVIDER_CONFIG.",
+			"PID_ACP_PROVIDER is not registered. Set it to the ID of a provider loaded by PID_ACP_PROVIDERS.",
 		);
 	if (!models.getModel(provider, modelId))
 		throw new ModelConfigurationError(

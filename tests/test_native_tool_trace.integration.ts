@@ -7,7 +7,7 @@ import { persistenceFixture } from "./helpers/persistence.ts";
 test("live trace helper follows actual native parent IDs and nested operations without comparing prompted source", async (t) => {
 	const fixture = await persistenceFixture(t);
 	const client = await fixture.client({
-		PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/file-provider.ts"),
+		PID_ACP_PROVIDERS: resolve("tests/helpers/file-provider.ts"),
 		PID_ACP_MODEL: "files",
 	});
 	const { sessionId } = await client.request("session/new", {

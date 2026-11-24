@@ -8,7 +8,7 @@ pid-acp connects ACP clients to Pi Durable.
 
 ```sh
 npm ci && npm run build
-PID_ACP_PROVIDER_CONFIG=/absolute/path/to/provider.mts \
+PID_ACP_PROVIDERS=/absolute/path/to/provider.mts \
   PID_ACP_MODEL=example-model node dist/main.js
 ```
 
@@ -39,7 +39,7 @@ PID_ACP_PROVIDER_CONFIG=/absolute/path/to/provider.mts \
 
 | Environment variable | Description |
 | --- | --- |
-| `PID_ACP_PROVIDER_CONFIG` | Absolute path to a trusted provider module, or a nonempty JSON array of absolute paths. Each module default-exports one Pi AI provider. |
+| `PID_ACP_PROVIDERS` | Absolute path to a trusted provider module, or a nonempty JSON array of absolute paths. Each module default-exports one Pi AI provider. |
 | `PID_ACP_PROVIDER` | Default provider ID. May be omitted when exactly one provider ID is registered. |
 | `PID_ACP_MODEL` | Default chat model ID registered by the selected provider. |
 | `PID_ACP_THINKING` | Model thinking level; defaults to `off`. |
@@ -57,7 +57,7 @@ The configured default applies only to new sessions. Saved sessions load with th
 For one provider, use the quickstart above and let pid-acp infer the provider ID. For multiple providers, select the default provider and model separately:
 
 ```sh
-PID_ACP_PROVIDER_CONFIG='["/absolute/path/to/provider.mts","/absolute/path/to/other.mts"]' \
+PID_ACP_PROVIDERS='["/absolute/path/to/provider.mts","/absolute/path/to/other.mts"]' \
   PID_ACP_PROVIDER=example PID_ACP_MODEL=example-model node dist/main.js
 ```
 

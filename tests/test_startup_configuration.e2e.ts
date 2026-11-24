@@ -12,7 +12,7 @@ const routingProviders = {
 	beta: resolve("tests/helpers/routing-provider-beta.ts"),
 };
 const routingConfig = {
-	PID_ACP_PROVIDER_CONFIG: JSON.stringify(Object.values(routingProviders)),
+	PID_ACP_PROVIDERS: JSON.stringify(Object.values(routingProviders)),
 	PID_ACP_MODEL: "shared",
 	PID_ACP_SOCKET_PATH: undefined,
 	PID_ACP_EXTENSIONS: "",
@@ -58,10 +58,7 @@ test("production executable fails configuration without stdout or leaking creden
 	});
 	assert.equal(code, 1);
 	assert.equal(stdout, "");
-	assert.match(
-		stderr,
-		/^pid-acp: Set PID_ACP_PROVIDER_CONFIG.*nonempty JSON array/,
-	);
+	assert.match(stderr, /^pid-acp: Set PID_ACP_PROVIDERS.*nonempty JSON array/);
 	assert.equal(stderr.split("\n").filter(Boolean).length, 1);
 	assert.ok(!stderr.includes("do-not-print"));
 });
@@ -80,7 +77,7 @@ test("production executable rejects an unregistered default provider on stderr",
 	assert.equal(stdout, "");
 	assert.match(
 		stderr,
-		/^pid-acp: PID_ACP_PROVIDER is not registered\. Set it to the ID of a provider loaded by PID_ACP_PROVIDER_CONFIG\./,
+		/^pid-acp: PID_ACP_PROVIDER is not registered\. Set it to the ID of a provider loaded by PID_ACP_PROVIDERS\./,
 	);
 });
 
@@ -117,7 +114,7 @@ test("production sessions retain their selected providers across changes to the 
 
 	const withoutBeta = await f.client({
 		...routingConfig,
-		PID_ACP_PROVIDER_CONFIG: routingProviders.alpha,
+		PID_ACP_PROVIDERS: routingProviders.alpha,
 		PID_ACP_PROVIDER: undefined,
 	});
 	await assert.rejects(
@@ -144,7 +141,7 @@ test("production executable reports safe entry-specific registration errors on s
 	};`,
 	);
 	const { code, stdout, stderr } = await runStartup({
-		PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/native-provider.ts"),
+		PID_ACP_PROVIDERS: resolve("tests/helpers/native-provider.ts"),
 		PID_ACP_MODEL: "faux-1",
 		PID_ACP_MCP_CONFIG: "",
 		PID_ACP_EXTENSIONS: JSON.stringify([first, second]),

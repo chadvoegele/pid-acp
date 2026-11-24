@@ -23,7 +23,7 @@ test("empty overrides disable home resources without rediscovering them as proje
 			cwd,
 			env: {
 				HOME: home,
-				PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/native-provider.ts"),
+				PID_ACP_PROVIDERS: resolve("tests/helpers/native-provider.ts"),
 				PID_ACP_MODEL: "faux-1",
 				PID_ACP_THINKING: "off",
 				PID_ACP_INSTRUCTIONS: "",
@@ -69,9 +69,7 @@ for (const defaults of [true, false]) {
 			client = await startClient({
 				live: true,
 				env: {
-					PID_ACP_PROVIDER_CONFIG: resolve(
-						"tests/helpers/resources-provider.ts",
-					),
+					PID_ACP_PROVIDERS: resolve("tests/helpers/resources-provider.ts"),
 					PID_ACP_MODEL: "faux-1",
 					PID_ACP_THINKING: "off",
 					HOME: root,

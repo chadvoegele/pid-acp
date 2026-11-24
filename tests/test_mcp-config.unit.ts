@@ -38,7 +38,7 @@ async function fixture(t: TestContext) {
 }
 
 const launch = {
-	PID_ACP_PROVIDER_CONFIG: "/fixture/provider.mjs",
+	PID_ACP_PROVIDERS: "/fixture/provider.mjs",
 	PID_ACP_MODEL: "fixture",
 };
 

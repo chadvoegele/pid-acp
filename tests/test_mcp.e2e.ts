@@ -83,7 +83,7 @@ async function fixture(t: TestContext) {
 		const client = await f.client(
 			{
 				PID_ACP_MCP_CONFIG: path,
-				PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/mcp-provider.ts"),
+				PID_ACP_PROVIDERS: resolve("tests/helpers/mcp-provider.ts"),
 				PID_ACP_MODEL: "faux-1",
 				...env,
 			},
@@ -175,7 +175,7 @@ test("production startup preserves only sanitized MCP configuration categories a
 		const child = spawnSync(process.execPath, ["dist/main.js"], {
 			env: {
 				...process.env,
-				PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/mcp-provider.ts"),
+				PID_ACP_PROVIDERS: resolve("tests/helpers/mcp-provider.ts"),
 				PID_ACP_MODEL: "faux-1",
 				PID_ACP_MCP_CONFIG: path,
 				PID_ACP_INSTRUCTIONS: "",

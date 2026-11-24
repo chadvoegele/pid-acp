@@ -8,22 +8,22 @@ import { readConfig, validateCwd, configureModels } from "../dist/config.js";
 import { UserExtensionError } from "../dist/user-extensions.js";
 
 const env = {
-	PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/native-provider.ts"),
+	PID_ACP_PROVIDERS: resolve("tests/helpers/native-provider.ts"),
 	PID_ACP_MODEL: "faux-1",
 };
 
 test("configuration requires a provider config and a literal model ID", () => {
-	assert.throws(() => readConfig({}), /PID_ACP_PROVIDER_CONFIG/);
+	assert.throws(() => readConfig({}), /PID_ACP_PROVIDERS/);
 	assert.throws(
-		() => readConfig({ ...env, PID_ACP_PROVIDER_CONFIG: "relative.mjs" }),
-		/PID_ACP_PROVIDER_CONFIG/,
+		() => readConfig({ ...env, PID_ACP_PROVIDERS: "relative.mjs" }),
+		/PID_ACP_PROVIDERS/,
 	);
 	assert.throws(
 		() => readConfig({ ...env, PID_ACP_MODEL: " " }),
 		/PID_ACP_MODEL/,
 	);
 	assert.deepEqual(readConfig(env), {
-		providerPaths: [env.PID_ACP_PROVIDER_CONFIG],
+		providerPaths: [env.PID_ACP_PROVIDERS],
 		providerId: undefined,
 		modelId: "faux-1",
 		thinkingLevel: "off",
@@ -43,7 +43,7 @@ test("provider paths accept a nonempty JSON array and preserve order and repeate
 	const paths = [resolve("z.mts"), resolve("a.mjs"), resolve("z.mts")];
 	const config = readConfig({
 		...env,
-		PID_ACP_PROVIDER_CONFIG: JSON.stringify(paths),
+		PID_ACP_PROVIDERS: JSON.stringify(paths),
 		PID_ACP_PROVIDER: "selected",
 	});
 	assert.deepEqual(config.providerPaths, paths);
@@ -61,26 +61,20 @@ test("invalid provider lists identify bad entries without echoing input", () => 
 		JSON.stringify(resolve("provider.mjs")),
 		`["${secret}",`,
 	])
-		assert.throws(
-			() => readConfig({ ...env, PID_ACP_PROVIDER_CONFIG: value }),
-			{
-				message:
-					"Set PID_ACP_PROVIDER_CONFIG to an absolute provider module path or a nonempty JSON array of absolute paths.",
-			},
-		);
+		assert.throws(() => readConfig({ ...env, PID_ACP_PROVIDERS: value }), {
+			message:
+				"Set PID_ACP_PROVIDERS to an absolute provider module path or a nonempty JSON array of absolute paths.",
+		});
 	for (const member of [null, [], 1, "", `https://user:${secret}@example.test`])
 		assert.throws(
 			() =>
 				readConfig({
 					...env,
-					PID_ACP_PROVIDER_CONFIG: JSON.stringify([
-						env.PID_ACP_PROVIDER_CONFIG,
-						member,
-					]),
+					PID_ACP_PROVIDERS: JSON.stringify([env.PID_ACP_PROVIDERS, member]),
 				}),
 			{
 				message:
-					"PID_ACP_PROVIDER_CONFIG entry 2: Use an absolute provider module path.",
+					"PID_ACP_PROVIDERS entry 2: Use an absolute provider module path.",
 			},
 		);
 });
@@ -229,7 +223,7 @@ test("multiple providers require an explicit default and disambiguate shared mod
 		),
 	];
 	const launch = {
-		PID_ACP_PROVIDER_CONFIG: JSON.stringify(paths),
+		PID_ACP_PROVIDERS: JSON.stringify(paths),
 		PID_ACP_MODEL: "shared",
 	};
 	await assert.rejects(
@@ -278,7 +272,7 @@ test("duplicate provider IDs use Pi AI replacement and count as one registered p
 		await writeProvider(join(dir, "replacement.mjs"), "same", "new"),
 	];
 	const launch = {
-		PID_ACP_PROVIDER_CONFIG: JSON.stringify(paths),
+		PID_ACP_PROVIDERS: JSON.stringify(paths),
 		PID_ACP_MODEL: "new",
 	};
 	const { models, model } = await configureModels(readConfig(launch));
@@ -313,7 +307,7 @@ test("module load and registration failures identify the entry without echoing m
 	const dir = await makeProviderDirectory(t);
 	const secret = "private-fixture-token";
 	const diagnostics =
-		/PID_ACP_PROVIDER_CONFIG entry 2: Could not load or register provider/;
+		/PID_ACP_PROVIDERS entry 2: Could not load or register provider/;
 	for (const [name, source] of [
 		["missing", undefined],
 		["bad\0path", undefined],
@@ -330,10 +324,7 @@ test("module load and registration failures identify the entry without echoing m
 			configureModels(
 				readConfig({
 					...env,
-					PID_ACP_PROVIDER_CONFIG: JSON.stringify([
-						env.PID_ACP_PROVIDER_CONFIG,
-						path,
-					]),
+					PID_ACP_PROVIDERS: JSON.stringify([env.PID_ACP_PROVIDERS, path]),
 				}),
 			),
 			(error: Error) => {

@@ -88,7 +88,7 @@ test("production executable uses configured OpenAI-compatible HTTP provider over
 			live: true,
 			cwd,
 			env: {
-				PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/llama-qwen.ts"),
+				PID_ACP_PROVIDERS: resolve("tests/helpers/llama-qwen.ts"),
 				PID_ACP_THINKING: "off",
 				PID_ACP_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
 				PID_ACP_MODEL: "scripted-http",

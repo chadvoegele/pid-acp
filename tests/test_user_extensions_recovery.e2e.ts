@@ -152,7 +152,7 @@ test("production CLI recovers a user task before ACP input, even after a failed 
 	);
 	const { mcpConfig, mcpLog } = await writeMcpConfig(f.root);
 	const env = {
-		PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/native-provider.ts"),
+		PID_ACP_PROVIDERS: resolve("tests/helpers/native-provider.ts"),
 		PID_ACP_MODEL: "faux-1",
 		PID_ACP_SESSIONS_DIR: f.sessions,
 		PID_ACP_INSTRUCTIONS: "",

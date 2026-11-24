@@ -6,7 +6,7 @@ import { startClient, waitFor } from "./helpers/client.ts";
 import { readText, readStatus } from "./helpers/updates.ts";
 
 for (const name of [
-	"PID_ACP_PROVIDER_CONFIG",
+	"PID_ACP_PROVIDERS",
 	"PID_ACP_BASE_URL",
 	"PID_ACP_MODEL",
 	"PID_ACP_API_KEY",

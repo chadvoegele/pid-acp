@@ -65,7 +65,7 @@ test("codemode batches native tools, chains file calls and replays only upstream
 }, async (t) => {
 	const f = await persistenceFixture(t);
 	const provider = {
-		PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/file-provider.ts"),
+		PID_ACP_PROVIDERS: resolve("tests/helpers/file-provider.ts"),
 		PID_ACP_MODEL: "files",
 	};
 	const client = await f.client(provider);
@@ -163,7 +163,7 @@ test("ordinary conversation cancellation reaches a running codemode script and t
 }, async (t) => {
 	const f = await persistenceFixture(t);
 	const client = await f.client({
-		PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/file-provider.ts"),
+		PID_ACP_PROVIDERS: resolve("tests/helpers/file-provider.ts"),
 		PID_ACP_MODEL: "files",
 	});
 	const { sessionId } = await client.request("session/new", {
@@ -247,7 +247,7 @@ test("fresh production process resumes codemode without ACP input and later load
 	const recovery = spawn(process.execPath, ["dist/main.js"], {
 		env: {
 			...process.env,
-			PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/persistence-provider.ts"),
+			PID_ACP_PROVIDERS: resolve("tests/helpers/persistence-provider.ts"),
 			PID_ACP_MODEL: "faux-1",
 			PID_ACP_THINKING: "off",
 			PID_ACP_MCP_CONFIG: "",

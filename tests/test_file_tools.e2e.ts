@@ -26,7 +26,7 @@ async function createFileClient(t: TestContext) {
 		live: true,
 		cwd,
 		env: {
-			PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/file-provider.ts"),
+			PID_ACP_PROVIDERS: resolve("tests/helpers/file-provider.ts"),
 			PID_ACP_MODEL: "files",
 			FILE_VISION: "0",
 			PID_ACP_THINKING: "off",
