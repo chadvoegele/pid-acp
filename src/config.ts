@@ -3,14 +3,15 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createModels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
-import type { Provider } from "@earendil-works/pi-ai/models";
+import type { Models, Provider } from "@earendil-works/pi-ai/models";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import type { McpConfigPath } from "./mcp-config.js";
 import type { ResourcePaths } from "./resources.js";
 import { UserExtensionError } from "./user-extensions.js";
 
 export interface Config {
-	readonly providerConfig: string;
+	readonly providerPaths: readonly string[];
+	readonly providerId: string | undefined;
 	readonly modelId: string;
 	readonly thinkingLevel: ModelThinkingLevel;
 	readonly resources: ResourcePaths;
@@ -21,6 +22,8 @@ export interface Config {
 }
 
 export class SocketConfigurationError extends Error {}
+
+export class ModelConfigurationError extends Error {}
 
 export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
 	const socketPath = env.PID_ACP_SOCKET_PATH;
@@ -35,11 +38,11 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		throw new Error(
 			"PID_ACP_SESSIONS_DIR must be a nonempty absolute directory.",
 		);
-	if (!env.PID_ACP_PROVIDER_CONFIG || !isAbsolute(env.PID_ACP_PROVIDER_CONFIG))
-		throw new Error(
-			"Set PID_ACP_PROVIDER_CONFIG to an absolute provider module path.",
+	const providerPaths = parseProviderPaths(env.PID_ACP_PROVIDER_CONFIG);
+	if (!env.PID_ACP_MODEL?.trim())
+		throw new ModelConfigurationError(
+			"Set PID_ACP_MODEL to a literal chat model ID.",
 		);
-	if (!env.PID_ACP_MODEL?.trim()) throw new Error("Set PID_ACP_MODEL.");
 	const thinkingLevel = MODEL_THINKING_LEVELS.find(
 		(level) => level === (env.PID_ACP_THINKING ?? "off"),
 	);
@@ -65,10 +68,34 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		mcpConfig: resolveMcpConfigPath(env),
 		extensionPaths: parseExtensionPaths(env.PID_ACP_EXTENSIONS),
 		resources: { instructionsPath, skillsDir },
-		providerConfig: env.PID_ACP_PROVIDER_CONFIG,
+		providerPaths,
+		providerId: env.PID_ACP_PROVIDER,
 		modelId: env.PID_ACP_MODEL,
 		thinkingLevel,
 	};
+}
+
+function parseProviderPaths(value: string | undefined): readonly string[] {
+	let paths: unknown;
+	if (value && isAbsolute(value)) paths = [value];
+	else if (value) {
+		try {
+			paths = JSON.parse(value);
+		} catch {
+			// Invalid JSON is handled by the same diagnostic as other invalid input.
+		}
+	}
+	if (!Array.isArray(paths) || paths.length === 0)
+		throw new ModelConfigurationError(
+			"Set PID_ACP_PROVIDER_CONFIG to an absolute provider module path or a nonempty JSON array of absolute paths.",
+		);
+	return paths.map((path: unknown, index) => {
+		if (typeof path !== "string" || !isAbsolute(path) || path.includes("\0"))
+			throw new ModelConfigurationError(
+				`PID_ACP_PROVIDER_CONFIG entry ${index + 1}: Use an absolute provider module path without NUL characters.`,
+			);
+		return path;
+	});
 }
 
 class UserExtensionConfigError extends UserExtensionError {
@@ -131,26 +158,50 @@ export async function validateCwd(cwd: string): Promise<void> {
 		throw new Error("cwd must be an existing absolute directory.");
 }
 
-export async function configureModels(config: Config) {
-	// Configuration is trusted executable code, selected only by the launch environment.
-	const { default: provider } = (await import(
-		pathToFileURL(config.providerConfig).href
-	)) as {
-		default: Provider;
-	};
-	if (
-		!provider ||
-		typeof provider.id !== "string" ||
-		!provider.id ||
-		typeof provider.getModels !== "function" ||
-		typeof provider.streamSimple !== "function"
-	)
-		throw new Error(
-			"Provider module must default-export a Pi AI Provider with getModels() and streamSimple().",
-		);
+export async function configureModels({
+	providerPaths,
+	providerId,
+	modelId,
+}: Config) {
 	const models = createModels();
-	models.setProvider(provider);
-	if (!models.getModel(provider.id, config.modelId))
-		throw new Error("Configured chat model is not registered by the provider.");
-	return { models, model: { provider: provider.id, modelId: config.modelId } };
+	// Provider modules are trusted executable code selected by the operator.
+	for (const [index, path] of providerPaths.entries()) {
+		try {
+			const { default: provider } = (await import(
+				pathToFileURL(path).href
+			)) as {
+				default: Provider;
+			};
+			models.setProvider(provider);
+		} catch {
+			throw new ModelConfigurationError(
+				`PID_ACP_PROVIDER_CONFIG entry ${index + 1}: Could not load or register provider. Check that the module exists, loads successfully, and default-exports a Pi AI Provider.`,
+			);
+		}
+	}
+
+	return { models, model: resolveDefaultModel(models, providerId, modelId) };
+}
+
+function resolveDefaultModel(
+	models: Models,
+	providerId: string | undefined,
+	modelId: string,
+) {
+	const providers = models.getProviders();
+	const provider =
+		providerId ?? (providers.length === 1 ? providers[0]?.id : undefined);
+	if (provider === undefined)
+		throw new ModelConfigurationError(
+			"Set PID_ACP_PROVIDER to a registered provider ID when more than one provider is registered.",
+		);
+	if (!models.getProvider(provider))
+		throw new ModelConfigurationError(
+			"PID_ACP_PROVIDER is not registered. Set it to the ID of a provider loaded by PID_ACP_PROVIDER_CONFIG.",
+		);
+	if (!models.getModel(provider, modelId))
+		throw new ModelConfigurationError(
+			"PID_ACP_MODEL is not registered by the selected provider. Set it to a literal chat model ID from that provider.",
+		);
+	return { provider, modelId };
 }

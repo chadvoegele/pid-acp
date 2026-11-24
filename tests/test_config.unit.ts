@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -12,7 +12,7 @@ const env = {
 	PID_ACP_MODEL: "faux-1",
 };
 
-test("configuration requires an explicit absolute provider module and model", () => {
+test("configuration requires a provider config and a literal model ID", () => {
 	assert.throws(() => readConfig({}), /PID_ACP_PROVIDER_CONFIG/);
 	assert.throws(
 		() => readConfig({ ...env, PID_ACP_PROVIDER_CONFIG: "relative.mjs" }),
@@ -23,7 +23,8 @@ test("configuration requires an explicit absolute provider module and model", ()
 		/PID_ACP_MODEL/,
 	);
 	assert.deepEqual(readConfig(env), {
-		providerConfig: env.PID_ACP_PROVIDER_CONFIG,
+		providerPaths: [env.PID_ACP_PROVIDER_CONFIG],
+		providerId: undefined,
 		modelId: "faux-1",
 		thinkingLevel: "off",
 		extensionPaths: [],
@@ -36,6 +37,59 @@ test("configuration requires an explicit absolute provider module and model", ()
 			skillsDir: join(homedir(), ".agents", "skills"),
 		},
 	});
+});
+
+test("provider paths accept a nonempty JSON array and preserve order and repeated paths", () => {
+	const paths = [resolve("z.mts"), resolve("a.mjs"), resolve("z.mts")];
+	const config = readConfig({
+		...env,
+		PID_ACP_PROVIDER_CONFIG: JSON.stringify(paths),
+		PID_ACP_PROVIDER: "selected",
+	});
+	assert.deepEqual(config.providerPaths, paths);
+	assert.equal(config.providerId, "selected");
+	assert.deepEqual(config.extensionPaths, []);
+});
+
+test("invalid provider lists identify bad entries without echoing input", () => {
+	const secret = "private-fixture-token";
+	for (const value of [
+		"",
+		"[]",
+		"null",
+		"{}",
+		JSON.stringify(resolve("provider.mjs")),
+		`["${secret}",`,
+	])
+		assert.throws(
+			() => readConfig({ ...env, PID_ACP_PROVIDER_CONFIG: value }),
+			{
+				message:
+					"Set PID_ACP_PROVIDER_CONFIG to an absolute provider module path or a nonempty JSON array of absolute paths.",
+			},
+		);
+	for (const member of [
+		null,
+		[],
+		1,
+		"",
+		`https://user:${secret}@example.test`,
+		resolve("bad\0path.mjs"),
+	])
+		assert.throws(
+			() =>
+				readConfig({
+					...env,
+					PID_ACP_PROVIDER_CONFIG: JSON.stringify([
+						env.PID_ACP_PROVIDER_CONFIG,
+						member,
+					]),
+				}),
+			{
+				message:
+					"PID_ACP_PROVIDER_CONFIG entry 2: Use an absolute provider module path without NUL characters.",
+			},
+		);
 });
 
 test("user extension paths are opt-in and preserve configuration order", () => {
@@ -132,10 +186,112 @@ test("native Pi AI provider registers unchanged without endpoint assumptions", a
 		models.getModel(model.provider, model.modelId),
 		provider.getModels()[0],
 	);
-	await assert.rejects(
-		configureModels(readConfig({ ...env, PID_ACP_MODEL: "missing" })),
-		/not registered/,
+	assert.deepEqual(
+		(
+			await configureModels(
+				readConfig({ ...env, PID_ACP_PROVIDER: provider.id }),
+			)
+		).model,
+		model,
 	);
+});
+
+async function makeProviderDirectory(t: TestContext) {
+	const dir = await mkdtemp(join(tmpdir(), "pid-config-"));
+	t.after(() => rm(dir, { recursive: true, force: true }));
+	return dir;
+}
+
+async function writeProvider(path: string, id: string, ...modelIds: string[]) {
+	const fauxModule = import.meta.resolve(
+		"@earendil-works/pi-ai/providers/faux",
+	);
+	await writeFile(
+		path,
+		`
+		import { fauxProvider } from ${JSON.stringify(fauxModule)};
+		export default fauxProvider(${JSON.stringify({
+			provider: id,
+			models: modelIds.map((id) => ({ id })),
+		})}).provider;
+	`,
+	);
+	return path;
+}
+
+test("multiple providers require an explicit default and disambiguate shared model IDs", async (t) => {
+	const dir = await makeProviderDirectory(t);
+	const paths = [
+		await writeProvider(
+			join(dir, "first.mjs"),
+			"first",
+			"shared",
+			"first-only",
+		),
+		await writeProvider(
+			join(dir, "second.mjs"),
+			"second",
+			"shared",
+			"first/shared",
+		),
+	];
+	const launch = {
+		PID_ACP_PROVIDER_CONFIG: JSON.stringify(paths),
+		PID_ACP_MODEL: "shared",
+	};
+	await assert.rejects(
+		configureModels(readConfig(launch)),
+		/Set PID_ACP_PROVIDER.*more than one/,
+	);
+	for (const provider of ["first", "second"]) {
+		const { models, model } = await configureModels(
+			readConfig({ ...launch, PID_ACP_PROVIDER: provider }),
+		);
+		assert.deepEqual(
+			models.getProviders().map(({ id }) => id),
+			["first", "second"],
+		);
+		assert.deepEqual(model, { provider, modelId: "shared" });
+		assert.equal(
+			models.getModel(model.provider, model.modelId)?.provider,
+			provider,
+		);
+	}
+	const selected = { ...launch, PID_ACP_PROVIDER: "second" };
+	assert.deepEqual(
+		(
+			await configureModels(
+				readConfig({ ...selected, PID_ACP_MODEL: "first/shared" }),
+			)
+		).model,
+		{ provider: "second", modelId: "first/shared" },
+	);
+	for (const modelId of ["missing", "first-only", "second/shared"])
+		await assert.rejects(
+			configureModels(readConfig({ ...selected, PID_ACP_MODEL: modelId })),
+			/PID_ACP_MODEL is not registered by the selected provider/,
+		);
+	for (const providerId of ["missing", ""])
+		await assert.rejects(
+			configureModels(readConfig({ ...launch, PID_ACP_PROVIDER: providerId })),
+			/PID_ACP_PROVIDER is not registered/,
+		);
+});
+
+test("duplicate provider IDs use Pi AI replacement and count as one registered provider", async (t) => {
+	const dir = await makeProviderDirectory(t);
+	const paths = [
+		await writeProvider(join(dir, "original.mjs"), "same", "old"),
+		await writeProvider(join(dir, "replacement.mjs"), "same", "new"),
+	];
+	const launch = {
+		PID_ACP_PROVIDER_CONFIG: JSON.stringify(paths),
+		PID_ACP_MODEL: "new",
+	};
+	const { models, model } = await configureModels(readConfig(launch));
+	assert.deepEqual(model, { provider: "same", modelId: "new" });
+	assert.equal(models.getProviders().length, 1);
+	assert.equal(models.getModel("same", "old"), undefined);
 });
 
 test("thinking defaults off and validates all supported levels", () => {
@@ -160,27 +316,38 @@ test("thinking defaults off and validates all supported levels", () => {
 		);
 });
 
-test("missing or invalid explicit modules fail rather than falling back to user settings", async () => {
-	const dir = await mkdtemp(join(tmpdir(), "pid-config-"));
-	try {
-		const path = join(dir, "provider.mjs");
+test("module load and registration failures identify the entry without echoing module errors", async (t) => {
+	const dir = await makeProviderDirectory(t);
+	const secret = "private-fixture-token";
+	const diagnostics =
+		/PID_ACP_PROVIDER_CONFIG entry 2: Could not load or register provider/;
+	for (const [name, source] of [
+		["missing", undefined],
+		["no-default", "export const notDefault = {};"],
+		["import-failure", `throw new Error("${secret}");`],
+		[
+			"registration-failure",
+			`export default { get id() { throw new Error("${secret}"); } };`,
+		],
+	] as const) {
+		const path = join(dir, `${name}.mjs`);
+		if (source !== undefined) await writeFile(path, source);
 		await assert.rejects(
-			configureModels({ ...readConfig(env), providerConfig: path }),
+			configureModels(
+				readConfig({
+					...env,
+					PID_ACP_PROVIDER_CONFIG: JSON.stringify([
+						env.PID_ACP_PROVIDER_CONFIG,
+						path,
+					]),
+				}),
+			),
+			(error: Error) => {
+				assert.match(error.message, diagnostics);
+				assert.doesNotMatch(inspect(error), new RegExp(secret));
+				return true;
+			},
 		);
-		for (const [name, value] of [
-			["empty", "{}"],
-			["missing-methods", "{ id: 'incomplete' }"],
-			["missing-stream", "{ id: 'incomplete', getModels() { return [] } }"],
-		]) {
-			const providerConfig = join(dir, `${name}.mjs`);
-			await writeFile(providerConfig, `export default ${value};`);
-			await assert.rejects(
-				configureModels({ ...readConfig(env), providerConfig }),
-				/Pi AI Provider/,
-			);
-		}
-	} finally {
-		await rm(dir, { recursive: true, force: true });
 	}
 });
 

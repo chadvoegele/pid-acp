@@ -32,7 +32,7 @@ test("production executable fails configuration without stdout or leaking creden
 	assert.equal(stdout, "");
 	assert.match(
 		stderr,
-		/^pid-acp: Startup failed\. Set PID_ACP_PROVIDER_CONFIG/,
+		/^pid-acp: Set PID_ACP_PROVIDER_CONFIG.*nonempty JSON array/,
 	);
 	assert.equal(stderr.split("\n").filter(Boolean).length, 1);
 	assert.ok(!stderr.includes("do-not-print"));
