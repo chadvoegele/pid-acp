@@ -31,7 +31,7 @@ try {
 			error instanceof UserExtensionError ||
 			error instanceof SocketConfigurationError
 			? `pid-acp: ${error.message}`
-			: "pid-acp: Startup failed. Set PID_ACP_PROVIDER_CONFIG (absolute trusted module path) and PID_ACP_MODEL; verify the provider's endpoint and credentials; PID_ACP_THINKING must be off, minimal, low, medium, high, xhigh or max if set. PID_ACP_INSTRUCTIONS and PID_ACP_SKILLS_DIR must be absolute or empty if set. PID_ACP_SESSIONS_DIR must be a nonempty absolute, private, symlink-free directory if set. PID_ACP_MCP_CONFIG must select a supported trusted MCP file, or be empty to disable MCP. Verify installed dependencies.",
+			: "pid-acp: Startup failed. Set PID_ACP_PROVIDER_CONFIG (absolute trusted module path) and PID_ACP_MODEL; verify the provider's endpoint and credentials; PID_ACP_THINKING must be off, minimal, low, medium, high, xhigh or max if set. PID_ACP_INSTRUCTIONS and PID_ACP_SKILLS_DIR must be absolute or empty if set. PID_ACP_SESSIONS_DIR must be a nonempty absolute directory path if set. PID_ACP_MCP_CONFIG must select a supported trusted MCP file, or be empty to disable MCP. Verify installed dependencies.",
 	);
 	process.exitCode = 1;
 }

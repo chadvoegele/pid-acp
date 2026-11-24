@@ -1,7 +1,7 @@
 +++
 status = "draft"
 created = 2026-11-13
-last_update = 2026-11-19
+last_update = 2026-11-24
 +++
 
 # Multiple conversations in one shared Harness
@@ -75,7 +75,7 @@ Execution lifetime is independent of ACP client attachment. This extends
 [003](003-instructions-and-skills.md) and supersedes the single-attached-session,
 per-session Harness/storage topology and client-gated recovery in
 [004](004-persistent-sessions.md), retaining history replay, native recovery and
-private-storage requirements except where revised below.
+storage requirements except where revised below.
 
 ## Context
 
@@ -304,7 +304,7 @@ the entire shared namespace. Hold its stable inode until Harness
 and storage close; never unlink it to bypass ownership. A second process using
 that namespace must fail before opening/recovery, even for another session ID.
 Crash release must use OS lock semantics rather than PID guessing. Retain 004's
-private ownership/modes, symlink/hardlink rejection, fsync and whole-store backup
+operator-controlled permissions, fsync and whole-store backup
 rules, including JSONL sidecars. Keep keys and transcripts out of diagnostics and
 stdout ACP-only. Memory mode must use one MemoryStorage with equivalent routing.
 

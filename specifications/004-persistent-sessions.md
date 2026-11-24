@@ -1,7 +1,7 @@
 +++
 status = "final"
 created = 2026-10-22
-last_update = 2026-11-19
+last_update = 2026-11-24
 +++
 
 # Persistent sessions with load replay and native Durable recovery
@@ -48,7 +48,7 @@ follows [late join](https://github.com/earendil-works/pi/blob/main/packages/dura
 [JSON](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/19-json.ts),
 and [context](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/09-context.ts).
 
-The application owns launch configuration, private directory selection, exclusive
+The application owns launch configuration, exclusive
 ownership and ACP admission/presentation. Do not add a parallel session database,
 manifest, transcript schema, task status machine, raw JSONL recovery algorithm,
 Pi settings loader, or tool execution layer. History-to-ACP translation stays in
@@ -112,11 +112,11 @@ Runtime reference, optional Session, opening state, initialize or create/load AP
 Runtime owns the process failure signal; Session exposes it and AcpServer guards
 process-level admission.
 
-The sessions root must be trusted, private, owned by the server user and free of
-symlinks. Create directories as 0700 and files as 0600, including SDK sidecars,
-using a restrictive process umask. This also restricts newly created native tool
-files. Reject public, symlinked or hardlinked storage files. These controls do not
-sandbox native shell or file operations.
+The operator controls filesystem permissions and umask for session storage and
+workspace tools. pid-acp must leave the inherited umask unchanged, use default
+creation modes and impose no checks on modes, owner, file type or links. Normal
+filesystem errors still apply. Reject a nonempty `db/` missing `main.jsonl`
+rather than initializing over a partial store.
 
 Acquire an OS advisory lock before storage open and hold it until storage close.
 Use pinned `fs-native-extensions` on Linux. Keep the stable lock inode on release;
@@ -126,7 +126,7 @@ single-user deployment needs no heartbeat, lease or live-file tamper monitoring.
 
 On load, require an existing mapped conversation rather than silently creating it.
 Validate application document version, skills schema, saved configuration and
-canonical workspace. Validate backend file properties at backend opening. Reject
+canonical workspace. Reject
 unknown application document versions, corrupt/missing state, absent workspaces, relocation, or
 unavailable provider/model or invalid thinking levels with sanitized repair guidance.
 Saved choices need not match launch defaults. No memory fallback is allowed.
@@ -260,7 +260,9 @@ Never deliberately store credentials, environment variables or provider code.
 - Cancellation during native recovery, overlapping prompts, blocked tasks,
   cancellation/provider failures, EOF/signals, hard shutdown and disk failures.
 - Invalid IDs, missing/incompatible documents, configuration/cwd mismatch,
-  permissions/symlinks, torn lines/corruption/sidecars, lock races and crash release.
+  torn lines/corruption/sidecars, lock races and crash release.
+- Inherited umasks 0022 and 0077 govern storage and files created by workspace
+  child processes; a populated store can reopen under either mask.
 - External acpx 0.20.0 stateful create/restart/load: assert actual wire
   `session/load`, no `session/resume` or `session/new` fallback, historical replay
   before the response, context once, interrupted native outcome, cancellation and
