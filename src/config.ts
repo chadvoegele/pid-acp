@@ -90,9 +90,9 @@ function parseProviderPaths(value: string | undefined): readonly string[] {
 			"Set PID_ACP_PROVIDER_CONFIG to an absolute provider module path or a nonempty JSON array of absolute paths.",
 		);
 	return paths.map((path: unknown, index) => {
-		if (typeof path !== "string" || !isAbsolute(path) || path.includes("\0"))
+		if (typeof path !== "string" || !isAbsolute(path))
 			throw new ModelConfigurationError(
-				`PID_ACP_PROVIDER_CONFIG entry ${index + 1}: Use an absolute provider module path without NUL characters.`,
+				`PID_ACP_PROVIDER_CONFIG entry ${index + 1}: Use an absolute provider module path.`,
 			);
 		return path;
 	});

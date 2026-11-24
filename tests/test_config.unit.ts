@@ -68,14 +68,7 @@ test("invalid provider lists identify bad entries without echoing input", () => 
 					"Set PID_ACP_PROVIDER_CONFIG to an absolute provider module path or a nonempty JSON array of absolute paths.",
 			},
 		);
-	for (const member of [
-		null,
-		[],
-		1,
-		"",
-		`https://user:${secret}@example.test`,
-		resolve("bad\0path.mjs"),
-	])
+	for (const member of [null, [], 1, "", `https://user:${secret}@example.test`])
 		assert.throws(
 			() =>
 				readConfig({
@@ -87,7 +80,7 @@ test("invalid provider lists identify bad entries without echoing input", () => 
 				}),
 			{
 				message:
-					"PID_ACP_PROVIDER_CONFIG entry 2: Use an absolute provider module path without NUL characters.",
+					"PID_ACP_PROVIDER_CONFIG entry 2: Use an absolute provider module path.",
 			},
 		);
 });
@@ -323,6 +316,7 @@ test("module load and registration failures identify the entry without echoing m
 		/PID_ACP_PROVIDER_CONFIG entry 2: Could not load or register provider/;
 	for (const [name, source] of [
 		["missing", undefined],
+		["bad\0path", undefined],
 		["no-default", "export const notDefault = {};"],
 		["import-failure", `throw new Error("${secret}");`],
 		[
