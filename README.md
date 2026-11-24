@@ -8,7 +8,8 @@ pid-acp connects ACP clients to Pi Durable.
 
 ```sh
 npm ci && npm run build
-PID_ACP_PROVIDER_CONFIG="provider.ts" node dist/main.js
+PID_ACP_PROVIDER_CONFIG=/absolute/path/to/provider.mts \
+  PID_ACP_MODEL=example-model node dist/main.js
 ```
 
 ## Features
@@ -38,8 +39,9 @@ PID_ACP_PROVIDER_CONFIG="provider.ts" node dist/main.js
 
 | Environment variable | Description |
 | --- | --- |
-| `PID_ACP_PROVIDER_CONFIG` | Absolute path to a trusted provider module. |
-| `PID_ACP_MODEL` | Chat model ID registered by the provider. |
+| `PID_ACP_PROVIDER_CONFIG` | Absolute path to a trusted provider module, or a nonempty JSON array of absolute paths. Each module default-exports one Pi AI provider. |
+| `PID_ACP_PROVIDER` | Default provider ID. May be omitted when exactly one provider ID is registered. |
+| `PID_ACP_MODEL` | Default chat model ID registered by the selected provider. |
 | `PID_ACP_THINKING` | Model thinking level; defaults to `off`. |
 | `PID_ACP_INSTRUCTIONS` | Global instructions file; empty disables it. |
 | `PID_ACP_SKILLS_DIR` | Global skills directory; empty disables it. |
@@ -48,9 +50,20 @@ PID_ACP_PROVIDER_CONFIG="provider.ts" node dist/main.js
 | `PID_ACP_SESSIONS_DIR` | Absolute directory for persistent sessions. |
 | `PID_ACP_SOCKET_PATH` | Absolute Unix socket path; unset uses stdio. |
 
-### Provider sketch
+### Provider setup
 
-Set `PID_ACP_PROVIDER_CONFIG=/absolute/path/to/provider.mts` and `PID_ACP_MODEL=example-model`.
+The configured default applies only to new sessions. Saved sessions load with their original provider and model IDs. If that pair is unavailable, `session/load` fails instead of falling back to the default.
+
+For one provider, use the quickstart above and let pid-acp infer the provider ID. For multiple providers, select the default provider and model separately:
+
+```sh
+PID_ACP_PROVIDER_CONFIG='["/absolute/path/to/provider.mts","/absolute/path/to/other.mts"]' \
+  PID_ACP_PROVIDER=example PID_ACP_MODEL=example-model node dist/main.js
+```
+
+Providers register in array order. Duplicate provider IDs follow Pi AI replacement semantics: the later provider replaces the earlier one. Different providers can register the same model ID.
+
+Example `provider.mts`:
 
 ```ts
 import { createProvider } from "@earendil-works/pi-ai";
