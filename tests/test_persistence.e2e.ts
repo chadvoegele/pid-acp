@@ -1,9 +1,49 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { persistenceFixture } from "./helpers/persistence.ts";
 import { readText, readToolId } from "./helpers/updates.ts";
+
+for (const mask of [0o022, 0o077]) {
+	test(`session storage and workspace child inherit umask ${mask.toString(8)}`, async (t) => {
+		const f = await persistenceFixture(t);
+		const previous = process.umask(mask);
+		t.after(() => {
+			process.umask(previous);
+		});
+		const first = await f.client();
+		const { sessionId } = await first.request("session/new", {
+			cwd: f.cwd,
+			mcpServers: [],
+		});
+		await first.prompt(
+			JSON.stringify({ name: "bash", args: { command: "touch child-file" } }),
+			sessionId,
+		);
+		await first.close();
+
+		const db = join(f.sessions, "db");
+		for (const path of [f.sessions, db])
+			assert.equal((await stat(path)).mode & 0o777, 0o777 & ~mask, path);
+		for (const path of [
+			join(f.cwd, "child-file"),
+			join(f.sessions, "owner.lock"),
+			...(await readdir(db)).map((name) => join(db, name)),
+		])
+			assert.equal((await stat(path)).mode & 0o777, 0o666 & ~mask, path);
+
+		const next = await f.client();
+		await next.request("session/load", {
+			sessionId,
+			cwd: f.cwd,
+			mcpServers: [],
+		});
+		assert.ok(
+			next.updates.some((update) => update.sessionUpdate === "tool_call"),
+		);
+	});
+}
 
 test("production load replays history before response and continues with prior context exactly once", {
 	timeout: 20000,

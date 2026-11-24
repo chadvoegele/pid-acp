@@ -134,7 +134,7 @@ export class Runtime {
 			)
 				throw error;
 			throw new SessionOpenError(
-				"Could not open shared session storage. Check private files, compatible runtime and whole-store backups before restarting.",
+				"Could not open shared session storage. Check storage access, compatible runtime and whole-store backups before restarting.",
 				true,
 			);
 		}

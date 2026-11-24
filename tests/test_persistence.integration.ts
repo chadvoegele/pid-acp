@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import {
 	appendFile,
-	chmod,
 	mkdir,
 	readFile,
 	readdir,
@@ -172,15 +171,10 @@ test("restart retains independent canonical resources and agent choices despite 
 	await assert.rejects(next.loadSession(a.id, f.cwd), /workspace/);
 });
 
-test("one namespace is private, including JSONL sidecars, and retains its lock across restart", async (t) => {
+test("a shared namespace retains its lock inode across restart", async (t) => {
 	const f = await persistenceFixture(t);
 	const first = await f.runtime();
 	const a = await first.createSession(f.cwd);
-	assert.equal((await stat(f.sessions)).mode & 0o777, 0o700);
-	const directory = join(f.sessions, "db");
-	assert.equal((await stat(directory)).mode & 0o777, 0o700);
-	for (const name of await readdir(directory))
-		assert.equal((await stat(join(directory, name))).mode & 0o777, 0o600);
 	const inode = (await stat(join(f.sessions, "owner.lock"))).ino;
 	await assert.rejects(f.runtime(), /already owned/);
 	await first.close();
@@ -403,9 +397,6 @@ test("missing main file is not silently initialized over existing sidecars", asy
 	await rm(pathFor(f.sessions));
 	await assert.rejects(f.runtime(), /incomplete/);
 	assert.ok(!(await readdir(join(f.sessions, "db"))).includes("main.jsonl"));
-	await chmod(f.sessions, 0o755);
-	await assert.rejects(f.runtime(), /private/);
-	await chmod(f.sessions, 0o700);
 });
 
 for (const invalid of ["model", "cwd"] as const) {

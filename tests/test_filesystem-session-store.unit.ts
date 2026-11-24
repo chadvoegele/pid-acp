@@ -1,14 +1,5 @@
 import assert from "node:assert/strict";
-import {
-	chmod,
-	link,
-	readFile,
-	readdir,
-	stat,
-	symlink,
-	unlink,
-	writeFile,
-} from "node:fs/promises";
+import { link, readdir, rename, stat, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
@@ -33,72 +24,23 @@ test("namespace uses one stable lock inode and rejects a second owner before bac
 	assert.deepEqual(await readdir(root), ["db", "owner.lock"]);
 });
 
-for (const target of ["owner.lock", "db/sidecar"]) {
-	for (const mutation of ["public", "hardlink", "symlink"] as const) {
-		test(`namespace rejects ${mutation} ${target} and releases acquired lock`, async (t) => {
-			const f = await persistenceFixture(t);
-			const runtime = await f.runtime();
-			await runtime.createSession(f.cwd);
-			await runtime.close();
-			const path = join(f.sessions, target);
-			if (target !== "owner.lock") await writeFile(path, "", { mode: 0o600 });
-			const outside = join(f.root, "outside");
-			if (mutation === "public") await chmod(path, 0o644);
-			if (mutation === "hardlink") await link(path, outside);
-			if (mutation === "symlink") {
-				await unlink(path);
-				await writeFile(outside, "", { mode: 0o600 });
-				await symlink(outside, path);
-			}
-			await assert.rejects(
-				FilesystemSessionStore.open(f.sessions),
-				/private|linked|symbolic|ELOOP/,
-			);
-			if (mutation === "public") await chmod(path, 0o600);
-			if (mutation === "hardlink") await unlink(outside);
-			if (mutation === "symlink") {
-				await unlink(path);
-				await writeFile(path, "", { mode: 0o600 });
-			}
-			const next = await FilesystemSessionStore.open(f.sessions);
-			await next.close();
-		});
-	}
-}
+test("linked session paths can reopen a conversation and still share one lock", async (t) => {
+	const f = await persistenceFixture(t);
+	const first = await f.runtime();
+	const session = await first.createSession(f.cwd);
+	await first.close();
 
-for (const target of ["main", "document"] as const) {
-	for (const mutation of ["public", "hardlink", "symlink"] as const) {
-		test(`Runtime rejects ${mutation} of real JSONL ${target} before writes and releases its lock`, async (t) => {
-			const f = await persistenceFixture(t);
-			const first = await f.runtime();
-			const a = await first.createSession(f.cwd);
-			await first.close();
-			const directory = join(f.sessions, "db");
-			const name =
-				target === "main"
-					? "main.jsonl"
-					: (await readdir(directory)).find((name) => name.startsWith("doc-"));
-			assert.ok(name);
-			const path = join(directory, name);
-			const original = await readFile(path);
-			const outside = join(f.root, "outside");
-			if (mutation === "public") await chmod(path, 0o644);
-			if (mutation === "hardlink") await link(path, outside);
-			if (mutation === "symlink") {
-				await unlink(path);
-				await writeFile(outside, original, { mode: 0o600 });
-				await symlink(outside, path);
-			}
-			await assert.rejects(f.runtime(), /private|linked|symbolic/);
-			assert.deepEqual(await readFile(path), original);
-			if (mutation === "public") await chmod(path, 0o600);
-			if (mutation === "hardlink") await unlink(outside);
-			if (mutation === "symlink") {
-				await unlink(path);
-				await writeFile(path, original, { mode: 0o600 });
-			}
-			const next = await f.runtime();
-			assert.equal((await next.loadSession(a.id, f.cwd)).id, a.id);
-		});
+	const root = join(f.root, "storage");
+	await rename(f.sessions, root);
+	await symlink(root, f.sessions);
+	for (const name of ["db", "owner.lock"]) {
+		const target = join(f.root, name);
+		await rename(join(root, name), target);
+		await symlink(target, join(root, name));
 	}
-}
+	await link(join(root, "db/main.jsonl"), join(f.root, "main-link"));
+
+	const next = await f.runtime();
+	assert.equal((await next.loadSession(session.id, f.cwd)).id, session.id);
+	await assert.rejects(FilesystemSessionStore.open(root), /already owned/);
+});
