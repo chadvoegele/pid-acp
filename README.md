@@ -48,11 +48,6 @@ PID_ACP_PROVIDER_CONFIG="provider.ts" node dist/main.js
 | `PID_ACP_SESSIONS_DIR` | Absolute directory for persistent sessions. |
 | `PID_ACP_SOCKET_PATH` | Absolute Unix socket path; unset uses stdio. |
 
-Session files can contain prompts, source code, tool output and secrets. Restrict
-access to the sessions directory and its backups as needed. pid-acp uses the
-operator's existing filesystem permissions and umask for session storage and
-workspace tools; it does not make session files private.
-
 ### Provider sketch
 
 Set `PID_ACP_PROVIDER_CONFIG=/absolute/path/to/provider.mts` and `PID_ACP_MODEL=example-model`.
