@@ -171,8 +171,8 @@ Unexpected connection loss, tool removal or incompatible server behavior fails
 through the ordinary upstream/native call boundary. Sanitize error details and
 never retry ambiguous failures. pi-mcp may resend an OAuth-challenged request once
 after recovery; only opt in servers that reject before applying effects.
-Reconnect, hot reload and
-dynamic catalog consistency are out of scope; restart to pick up changes.
+Reconnect, hot reload and dynamic catalog consistency are out of scope; restart
+to pick up changes.
 
 Restart discards these definitions. Current file/current discovery then apply to
 all sessions, including old ones. Users own compatibility and repair configuration
@@ -239,8 +239,8 @@ restart. Do not inspect LiveDoc or maintain per-submission retry state.
 
 Accepted Runtime close stops external admission, joins native work, then closes
 all clients, including partial setup/failed discovery, then joins in-flight OAuth
-refreshes before sandbox disposal. Use all-settled cleanup so failures cannot skip owned resources. Apply the same
-cleanup to failed Runtime startup. Upstream stdio escalation fits the existing
+refreshes before sandbox disposal. Use all-settled cleanup so failures cannot
+skip owned resources. Apply the same cleanup to failed Runtime startup. Upstream stdio escalation fits the existing
 four-second process deadline; add no subprocess supervisor. Hard deadlines report
 failure rather than graceful success.
 
@@ -284,8 +284,8 @@ live model tests opt-in.
 - Cover normal/failed-start cleanup, partial setup, cancellation/next prompt on a
   healthy client, load rollback and child escalation. Assert no leaked fixture
   children or secrets.
-- Use synthetic grants and loopback MCP/authorization servers to verify pinned Pi
-  CLI bootstrap/reauthorization, disk restart, rotation with cross-process
+- Use synthetic grants and loopback MCP/authorization servers to verify Pi CLI
+  bootstrap and reauthorization, disk restart, rotation with cross-process
   contention, concurrent conversations, redirect rejection, cancellation/shutdown,
   and redaction in diagnostics and saved output.
 - Run npm ci, build, strict source/test typecheck, lint, format and full

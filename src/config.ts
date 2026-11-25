@@ -1,11 +1,12 @@
 import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createModels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { Models, Provider } from "@earendil-works/pi-ai/models";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import { McpConfigurationError, type McpConfigPath } from "./mcp-config.js";
+import { isPiMcpAuthFile } from "./mcp-oauth-store.js";
 import type { ResourcePaths } from "./resources.js";
 import { UserExtensionError } from "./user-extensions.js";
 
@@ -144,12 +145,7 @@ function resolveMcpAuthFile(env: NodeJS.ProcessEnv): string {
 	const path =
 		env.PID_ACP_MCP_AUTH_FILE ??
 		join(homedir(), ".pi", "agent", "mcp-auth.json");
-	if (
-		!isAbsolute(path) ||
-		resolve(path) !== path ||
-		basename(path) !== "mcp-auth.json" ||
-		path.includes("\0")
-	)
+	if (!isPiMcpAuthFile(path))
 		throw new McpConfigurationError(
 			"PID_ACP_MCP_AUTH_FILE must be the absolute canonical path to Pi's live mcp-auth.json.",
 		);

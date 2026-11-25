@@ -10,7 +10,6 @@ import {
 
 export type McpConfigPath = { path: string; required: boolean };
 type McpExposure = "codemode" | "hidden";
-type McpConfig = { mcpServers: Record<string, Record<string, unknown>> };
 type ValidatedServer = Exclude<McpServerConfigResult, { kind: "invalid" }>;
 export type PublicMcpOAuth = Pick<
 	McpOAuthConfig,
@@ -60,19 +59,25 @@ function normalizeExposure(value: unknown): McpExposure {
 function expandValues(
 	values: Record<string, string> | undefined,
 	env: NodeJS.ProcessEnv,
-	field: string,
+	field: "headers" | "env",
 ) {
-	if (!values) return;
-	for (const [key, value] of Object.entries(values)) {
-		values[key] = value.replace(
-			/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
-			(_match, name: string) => {
-				const replacement = Object.hasOwn(env, name) ? env[name] : undefined;
-				if (replacement === undefined) throw new MissingVariable(field);
-				return replacement;
-			},
-		);
-	}
+	if (!values) return undefined;
+	const entries = Object.entries(values);
+	if (entries.some(([, value]) => value.trimStart().startsWith("!")))
+		rejectConfig(`${field} command helpers are unsupported.`);
+	return Object.fromEntries(
+		entries.map(([key, value]) => [
+			key,
+			value.replace(
+				/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
+				(_match, name: string) => {
+					const replacement = Object.hasOwn(env, name) ? env[name] : undefined;
+					if (replacement === undefined) throw new MissingVariable(field);
+					return replacement;
+				},
+			),
+		]),
+	);
 }
 
 class MissingVariable extends Error {
@@ -105,26 +110,19 @@ async function readConfig(
 	}
 }
 
-const publicOAuthKeys = new Set([
-	"clientId",
-	"scope",
-	"callbackPort",
-	"callbackUrl",
-]);
-
 export function isSecureMcpOAuthUrl(url: URL) {
 	return (
 		!url.username &&
 		!url.password &&
-		!url.hash &&
+		!url.href.includes("#") &&
 		(url.protocol === "https:" ||
 			(url.protocol === "http:" &&
 				["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))
 	);
 }
 
-function validateOAuth(server: ValidatedServer) {
-	if (server.config.oauth === undefined) return;
+function readPublicOAuth(server: ValidatedServer): PublicMcpOAuth | undefined {
+	if (server.config.oauth === undefined) return undefined;
 	if (
 		server.kind !== "http" ||
 		!isSecureMcpOAuthUrl(new URL(server.config.url))
@@ -139,21 +137,25 @@ function validateOAuth(server: ValidatedServer) {
 		)
 	)
 		rejectConfig("OAuth cannot be combined with an Authorization header.");
+	const { clientId, scope, ...options } = oauth;
 	if (
-		!oauth.clientId?.trim() ||
-		[oauth.clientId, oauth.scope].some(
+		!clientId?.trim() ||
+		[clientId, scope].some(
 			(value) =>
 				value !== undefined &&
 				(value.trimStart().startsWith("!") || value.includes("${")),
 		) ||
-		Object.keys(oauth).some((key) => !publicOAuthKeys.has(key))
+		Object.keys(options).some(
+			(key) => key !== "callbackPort" && key !== "callbackUrl",
+		)
 	)
 		rejectConfig(
 			"OAuth requires a literal pre-registered public clientId; only scope, callbackPort and callbackUrl may also be set.",
 		);
+	return { ...oauth, clientId };
 }
 
-function validateServer(config: Record<string, unknown>) {
+function validateLocalFields(config: Record<string, unknown>) {
 	if (
 		["auth", "authProvider", "roots"].some((key) => config[key] !== undefined)
 	)
@@ -169,87 +171,55 @@ function validateServer(config: Record<string, unknown>) {
 	for (const mode of Object.values(config.toolExposure)) validateExposure(mode);
 }
 
-function validateConfig(config: unknown): asserts config is McpConfig {
-	if (!isRecord(config) || !isRecord(config.mcpServers))
-		rejectConfig("Expected an object containing an mcpServers object.");
-	if (
-		config.autoEnableCodemode !== undefined &&
-		config.autoEnableCodemode !== true
-	)
-		rejectConfig("autoEnableCodemode must be true when supplied.");
-	const namespaces = new Map<string, boolean>();
-	for (const [name, raw] of Object.entries(config.mcpServers).sort(([a], [b]) =>
-		a.localeCompare(b),
-	)) {
-		if (isRecord(raw) && raw.enabled === false) continue;
-		const checked = validateMcpServerConfig(name, raw);
-		if (checked.kind === "invalid") {
-			// Pinned upstream reasons are static; remove the only interpolated value.
-			const prefix = `server "${name}"`;
-			rejectConfig(
-				checked.error.startsWith(prefix)
-					? checked.error.slice(prefix.length).replace(/^:? /, "")
-					: "Server names require letters, digits, underscores or dashes.",
-			);
-		}
-		validateServer(checked.config);
-		validateOAuth(checked);
-		const namespace = mcpNamespace(name);
-		const oauth = checked.config.oauth !== undefined;
-		const previous = namespaces.get(namespace);
-		if (previous !== undefined && (previous || oauth))
-			rejectConfig(
-				"Enabled server names cannot share a namespace when either uses OAuth.",
-			);
-		namespaces.set(namespace, oauth);
-		const field = checked.kind === "http" ? "headers" : "env";
-		const values =
-			checked.kind === "http" ? checked.config.headers : checked.config.env;
-		if (
-			Object.values(values ?? {}).some((value) =>
-				value.trimStart().startsWith("!"),
-			)
-		)
-			rejectConfig(`${field} command helpers are unsupported.`);
+function validateServer(name: string, raw: unknown): ValidatedServer {
+	const checked = validateMcpServerConfig(name, raw);
+	if (checked.kind === "invalid") {
+		const prefix = `server "${name}"`;
+		rejectConfig(
+			checked.error.startsWith(prefix)
+				? checked.error.slice(prefix.length).replace(/^:? /, "")
+				: "Server names require letters, digits, underscores or dashes.",
+		);
 	}
+	validateLocalFields(checked.config);
+	return checked;
 }
 
-function normalizeConfig(
-	config: McpConfig,
+function bindServer(
+	name: string,
+	server: ValidatedServer,
+	oauth: PublicMcpOAuth | undefined,
 	env: NodeJS.ProcessEnv,
-): McpConfiguration {
-	const servers: McpConfiguration["servers"] = [];
-	for (const [name, raw] of Object.entries(config.mcpServers).sort(([a], [b]) =>
-		a.localeCompare(b),
-	)) {
-		if (raw.enabled === false) continue;
-		const http =
-			typeof raw.url === "string" &&
-			(raw.type === undefined ||
-				raw.type === "http" ||
-				raw.type === "streamable-http");
-		try {
-			expandValues(
-				(http ? raw.headers : raw.env) as Record<string, string> | undefined,
-				env,
-				http ? "headers" : "env",
-			);
-			raw.exposure = normalizeExposure(raw.exposure);
-			if (isRecord(raw.toolExposure)) {
-				for (const [tool, mode] of Object.entries(raw.toolExposure))
-					raw.toolExposure[tool] = normalizeExposure(mode);
-			}
-			servers.push({
+): McpServer | BlockedMcpServer {
+	const { config } = server;
+	const exposure = normalizeExposure(config.exposure);
+	const toolExposure = isRecord(config.toolExposure)
+		? Object.fromEntries(
+				Object.entries(config.toolExposure).map(([tool, mode]) => [
+					tool,
+					normalizeExposure(mode),
+				]),
+			)
+		: undefined;
+	try {
+		if (server.kind === "http") {
+			const headers = expandValues(server.config.headers, env, "headers");
+			return {
 				name,
-				kind: http ? "http" : "stdio",
-				config: raw,
-			} as McpServer);
-		} catch (error) {
-			if (!(error instanceof MissingVariable)) throw error;
-			servers.push({ kind: "blocked", name, issue: error.message });
+				kind: "http",
+				config: { ...server.config, exposure, toolExposure, oauth, headers },
+			};
 		}
+		const variables = expandValues(server.config.env, env, "env");
+		return {
+			name,
+			kind: "stdio",
+			config: { ...server.config, exposure, toolExposure, env: variables },
+		};
+	} catch (error) {
+		if (!(error instanceof MissingVariable)) throw error;
+		return { kind: "blocked", name, issue: error.message };
 	}
-	return { servers };
 }
 
 export async function loadMcpConfig(
@@ -257,8 +227,32 @@ export async function loadMcpConfig(
 	env: NodeJS.ProcessEnv = process.env,
 ): Promise<McpConfiguration> {
 	const config = await readConfig(selection);
-	validateConfig(config);
-	return normalizeConfig(config, env);
+	if (!isRecord(config) || !isRecord(config.mcpServers))
+		rejectConfig("Expected an object containing an mcpServers object.");
+	if (
+		config.autoEnableCodemode !== undefined &&
+		config.autoEnableCodemode !== true
+	)
+		rejectConfig("autoEnableCodemode must be true when supplied.");
+
+	const servers: McpConfiguration["servers"] = [];
+	const namespaces = new Map<string, boolean>();
+	for (const [name, raw] of Object.entries(config.mcpServers).sort(([a], [b]) =>
+		a.localeCompare(b),
+	)) {
+		if (isRecord(raw) && raw.enabled === false) continue;
+		const server = validateServer(name, raw);
+		const oauth = readPublicOAuth(server);
+		const namespace = mcpNamespace(name);
+		const previous = namespaces.get(namespace);
+		if (previous !== undefined && (previous || oauth !== undefined))
+			rejectConfig(
+				"Enabled server names cannot share a namespace when either uses OAuth.",
+			);
+		namespaces.set(namespace, oauth !== undefined);
+		servers.push(bindServer(name, server, oauth, env));
+	}
+	return { servers };
 }
 
 export function resolveMcpStdioOptions(

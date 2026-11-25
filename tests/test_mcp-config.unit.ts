@@ -218,6 +218,7 @@ test("HTTP OAuth opts into a literal public client", async (t) => {
 		{ ...entry, url: "http://example.test/mcp" },
 		{ ...entry, url: "https://user:SECRET@example.test/mcp" },
 		{ ...entry, url: "https://example.test/mcp#SECRET" },
+		{ ...entry, url: "https://example.test/mcp#" },
 		{ ...entry, headers: { aUtHoRiZaTiOn: "SECRET" } },
 		{ ...entry, oauth: {} },
 		...[
@@ -247,7 +248,7 @@ test("HTTP OAuth opts into a literal public client", async (t) => {
 		f.load({
 			mcpServers: {
 				...config.mcpServers,
-				fixture_docs: { command: "fixture" },
+				fixture_docs: { command: "fixture", env: { TOKEN: "${MISSING}" } },
 			},
 		}),
 		/share a namespace/,

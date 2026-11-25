@@ -138,9 +138,9 @@ export class McpAdapter {
 		for (const binding of this.servers) {
 			if ("issue" in binding) continue;
 			const { server, authProvider } = binding;
-			const state: ConnectionState = {};
+			const client = this.createClient(cwd);
 			try {
-				const client = await this.connect(binding, state, cwd);
+				await this.connect(binding, client, cwd);
 				const definitions = client.serverCapabilities?.tools
 					? await client.listTools()
 					: [];
@@ -159,7 +159,7 @@ export class McpAdapter {
 					`MCP server ${server.name}: startup discovery failed. ${failure ? `${oauthGuidance(server.name, failure)}.` : "Check its connection and tool schemas. Discovery uses the canonical process launch directory, not a saved workspace; configure an absolute server cwd if needed, then restart pid-acp."}`,
 				);
 			} finally {
-				await state.client?.close();
+				await client.close();
 			}
 		}
 		return { tools, namespaces };
@@ -172,40 +172,35 @@ export class McpAdapter {
 				if ("issue" in binding) return;
 				const { authProvider, connections } = binding;
 				if (connections.has(id)) return;
-				const state: ConnectionState = {};
+				const client = this.createClient(cwd);
+				const state: ConnectionState = { client };
 				connections.set(id, state);
 				try {
-					await this.connect(binding, state, cwd);
+					await this.connect(binding, client, cwd);
 				} catch (error) {
-					// Keep healthy servers usable; failed clients require a restart.
-					if (authProvider) state.oauthFailure = oauthFailure(error);
+					state.client = undefined;
+					state.oauthFailure = authProvider && oauthFailure(error);
 				}
 			}),
 		);
 	}
 
-	private async connect(
-		{ server, authProvider }: ConnectableServer,
-		state: ConnectionState,
-		cwd: string,
-	) {
-		if (this.stopped) throw new Error("MCP is closing.");
-		const transport = createMcpTransport(server, cwd, authProvider);
-		const client = new McpClient({
+	private createClient(cwd: string) {
+		return new McpClient({
 			name: "pid-acp",
 			version: "0.1.0",
 			capabilities: { roots: { listChanged: false } },
 			roots: [{ uri: pathToFileURL(cwd).href }],
 		});
-		state.client = client;
-		try {
-			await client.connect(transport);
-			return client;
-		} catch (error) {
-			await client.close().catch(() => {});
-			state.client = undefined;
-			throw error;
-		}
+	}
+
+	private async connect(
+		{ server, authProvider }: ConnectableServer,
+		client: McpClient,
+		cwd: string,
+	) {
+		if (this.stopped) throw new Error("MCP is closing.");
+		await client.connect(createMcpTransport(server, cwd, authProvider));
 	}
 
 	private createTools(

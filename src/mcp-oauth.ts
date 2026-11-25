@@ -43,12 +43,12 @@ export function piMcpAuthProvider(
 	isStopping: () => boolean,
 ): McpAuthProvider {
 	const store = piMcpStore(authFile, name, url);
-	const load = async () => {
+	const loadPublicState = async () => {
 		const state = await store.load();
 		// Pi does not persist client information for a configured client. Any
 		// existing registration may belong to a different grant or client mode.
 		if (
-			state?.clientInformation ||
+			state?.clientInformation !== undefined ||
 			(state?.tokens && state.tokens.token_type.toLowerCase() !== "bearer")
 		)
 			throw new UnsupportedClientError();
@@ -61,7 +61,7 @@ export function piMcpAuthProvider(
 		onChallenge: () => {},
 		store: {
 			...store,
-			load,
+			load: loadPublicState,
 			async save(state) {
 				try {
 					await store.save(state);
@@ -76,7 +76,7 @@ export function piMcpAuthProvider(
 		async token() {
 			// Never call upstream token(): its eager refresh uses global fetch.
 			await provider.settled();
-			const tokens = (await load())?.tokens;
+			const tokens = (await loadPublicState())?.tokens;
 			if (!tokens?.refresh_token)
 				throw new McpOAuthAuthorizationRequiredError();
 			return tokens.access_token;
@@ -93,18 +93,16 @@ export function piMcpAuthProvider(
 					},
 				});
 			} catch (error) {
-				if (error instanceof McpOAuthAuthorizationRequiredError) {
-					const challenge = parseWwwAuthenticate(
-						context.response.headers.get("www-authenticate"),
-					);
-					if (
-						challenge.error === "insufficient_scope" ||
-						!(await load())?.tokens?.refresh_token
-					)
-						throw error;
-				} else if (oauthFailure(error)) {
-					throw error;
+				if (!(error instanceof McpOAuthAuthorizationRequiredError)) {
+					if (oauthFailure(error)) throw error;
+					throw new RefreshFailedError();
 				}
+				const challenge = parseWwwAuthenticate(
+					context.response.headers.get("www-authenticate"),
+				);
+				if (challenge.error === "insufficient_scope") throw error;
+				const tokens = (await loadPublicState())?.tokens;
+				if (!tokens?.refresh_token) throw error;
 				throw new RefreshFailedError();
 			}
 		},

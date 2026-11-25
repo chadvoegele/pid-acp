@@ -14,7 +14,7 @@ import { startMcpHttpFixture } from "./helpers/mcp-http-fixture.ts";
 import {
 	clientId,
 	listenOAuthFixture,
-	privateFixture,
+	privateOAuthMarker,
 	startMcpOAuthFixture,
 } from "./helpers/mcp-oauth-fixture.ts";
 import { persistenceFixture } from "./helpers/persistence.ts";
@@ -57,9 +57,9 @@ async function setup(t: TestContext) {
 	};
 	const seed = (extras = {}) =>
 		write({ [key]: { ...state, ...extras }, [otherKey]: other });
-	const getAdapter = async () => {
+	const createAdapter = async (configPath = path) => {
 		const adapter = new McpAdapter({
-			...(await loadMcpConfig({ path, required: true }, env)),
+			...(await loadMcpConfig({ path: configPath, required: true }, env)),
 			oauthFile: authFile,
 		});
 		t.after(() => adapter.close());
@@ -79,7 +79,7 @@ async function setup(t: TestContext) {
 		seed,
 		read,
 		write,
-		getAdapter,
+		createAdapter,
 		async client() {
 			return disk.client({
 				...env,
@@ -93,7 +93,7 @@ function safeFailure(message: RegExp) {
 	return (error: Error) => {
 		assert.ok(error instanceof McpConfigurationError);
 		assert.match(error.message, message);
-		assert.doesNotMatch(String(error.stack), privateFixture);
+		assert.doesNotMatch(String(error.stack), privateOAuthMarker);
 		assert.equal(error.cause, undefined);
 		return true;
 	};
@@ -102,7 +102,7 @@ function safeFailure(message: RegExp) {
 test("discovery sends the stored bearer for an expired grant without refreshing until challenged", async (t) => {
 	const f = await setup(t);
 	await f.seed();
-	const adapter = await f.getAdapter();
+	const adapter = await f.createAdapter();
 	assert.equal((await adapter.discover(f.cwd)).tools.length, 1);
 	assert.equal(f.http.counts.refreshes, 0);
 	assert.ok(f.http.requests[0]?.accepted);
@@ -127,7 +127,7 @@ for (const endpoint of ["resource", "issuer", "token"] as const) {
 				res.end();
 			});
 			f.http.behavior.redirect = { endpoint, target, status };
-			const adapter = await f.getAdapter();
+			const adapter = await f.createAdapter();
 			await adapter.discover(f.cwd);
 			assert.equal(f.http.counts.refreshes, 0);
 			f.http.expire();
@@ -144,7 +144,7 @@ for (const endpoint of ["resource", "issuer", "token"] as const) {
 
 test("missing, legacy and nonrenewable grants fail before dispatch with login guidance; malformed or incompatible state fails closed", async (t) => {
 	const f = await setup(t);
-	const adapter = await f.getAdapter();
+	const adapter = await f.createAdapter();
 	const login = safeFailure(/pi mcp login project-docs.*restart pid-acp/);
 	await assert.rejects(adapter.discover(f.cwd), login);
 	await f.write({ [f.http.url]: f.state });
@@ -190,7 +190,7 @@ test("missing, legacy and nonrenewable grants fail before dispatch with login gu
 			assert.equal(error.code, 1);
 			assert.equal(error.stdout, "");
 			assert.match(error.stderr, /Pi OAuth store is invalid or inaccessible/);
-			assert.doesNotMatch(error.stderr, privateFixture);
+			assert.doesNotMatch(error.stderr, privateOAuthMarker);
 			return true;
 		},
 	);
@@ -214,7 +214,7 @@ test("conversation setup keeps healthy servers usable and retains a safe OAuth f
 		}),
 	);
 	await f.seed();
-	const adapter = await f.getAdapter();
+	const adapter = await f.createAdapter();
 	await adapter.discover(f.cwd);
 	await f.write({ [otherKey]: other });
 	const id = 1 as ConversationId;
@@ -298,7 +298,7 @@ test("two concurrent ACP conversations share one rotation, with one post-auth ef
 	assert.equal((await f.read())[f.key].tokens, undefined);
 	assert.doesNotMatch(
 		JSON.stringify(client.wire) + client.stderr,
-		privateFixture,
+		privateOAuthMarker,
 	);
 	await client.close();
 	for (const entry of await readdir(f.sessions, {
@@ -308,7 +308,7 @@ test("two concurrent ACP conversations share one rotation, with one post-auth ef
 		if (entry.isFile())
 			assert.doesNotMatch(
 				await readFile(join(entry.parentPath, entry.name), "utf8"),
-				privateFixture,
+				privateOAuthMarker,
 			);
 	}
 });
@@ -362,20 +362,21 @@ test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-
 	skip: !piBinary && "set PID_ACP_TEST_PI to a Pi CLI executable",
 	timeout: 30_000,
 }, async (t) => {
-	assert.ok(piBinary);
+	const piPath = piBinary;
+	assert.ok(piPath);
 	const f = await setup(t);
 	f.http.expire();
-	const piPath = join(f.home, "bin");
-	await mkdir(piPath);
+	const browserShimDir = join(f.home, "bin");
+	await mkdir(browserShimDir);
 	// Never run a browser on the host. Drive the mock approval and real loopback callback below.
-	await writeFile(join(piPath, "xdg-open"), "#!/bin/sh\nexit 0\n", {
+	await writeFile(join(browserShimDir, "xdg-open"), "#!/bin/sh\nexit 0\n", {
 		mode: 0o700,
 	});
 	const options = {
 		cwd: f.cwd,
 		timeout: 10_000,
 		env: {
-			PATH: `${piPath}:${process.env.PATH}`,
+			PATH: `${browserShimDir}:${process.env.PATH}`,
 			HOME: f.home,
 			PI_CODING_AGENT_DIR: f.dir,
 		},
@@ -395,14 +396,9 @@ test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-
 		acpConfig,
 		JSON.stringify({ mcpServers: { [name]: f.entry } }),
 	);
-	const adapter = async () =>
-		new McpAdapter({
-			...(await loadMcpConfig({ path: acpConfig, required: true })),
-			oauthFile: f.authFile,
-		});
-	async function login() {
+	const login = async () => {
 		const pending = exec(
-			piBinary as string,
+			piPath,
 			["mcp", "login", name, "--timeout", "7"],
 			options,
 		);
@@ -412,20 +408,24 @@ test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-
 			stdout += chunk;
 		});
 		const prefix = `${new URL(f.http.url).origin}/authorize?`;
-		await waitFor(() =>
-			stdout.split("\n").some((line) => line.startsWith(prefix)),
-		);
-		const authorizationUrl = stdout
-			.split("\n")
-			.find((line) => line.startsWith(prefix));
-		assert.ok(authorizationUrl);
-		assert.equal(
-			(await fetch(authorizationUrl, { signal: AbortSignal.timeout(5000) }))
-				.status,
-			200,
-		);
-		assert.match((await pending).stdout, /Signed in to MCP server/);
-	}
+		const findAuthorizationUrl = () =>
+			stdout.split("\n").find((line) => line.startsWith(prefix));
+		try {
+			await waitFor(() => findAuthorizationUrl() !== undefined);
+			const authorizationUrl = findAuthorizationUrl();
+			assert.ok(authorizationUrl);
+			assert.equal(
+				(await fetch(authorizationUrl, { signal: AbortSignal.timeout(5000) }))
+					.status,
+				200,
+			);
+			assert.match((await pending).stdout, /Signed in to MCP server/);
+		} finally {
+			if (pending.child.exitCode === null && pending.child.signalCode === null)
+				pending.child.kill();
+			await pending.catch(() => undefined);
+		}
+	};
 	await login();
 	const records = await f.read();
 	assert.equal(records[f.key].clientInformation, undefined);
@@ -435,13 +435,12 @@ test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-
 		f.http.tokens().refresh_token,
 	);
 	await f.write({ ...records, [otherKey]: other });
-	const first = await adapter();
-	t.after(() => first.close());
+	const first = await f.createAdapter(acpConfig);
 	await first.discover(f.cwd);
 	f.http.expire();
 	const gate = Promise.withResolvers<void>();
 	f.http.behavior.pause = gate.promise;
-	const pi = exec(piBinary, ["mcp", "list"], options);
+	const pi = exec(piPath, ["mcp", "list"], options);
 	void pi.catch(() => {});
 	try {
 		await waitFor(() => f.http.counts.refreshes === 1);
@@ -464,21 +463,20 @@ test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-
 		assert.match((await pi).stdout, /connected/);
 	} finally {
 		gate.resolve();
+		await pi.catch(() => undefined);
 	}
 	assert.equal(f.http.counts.refreshes, 1);
 	assert.deepEqual((await f.read())[otherKey], other);
 	await first.close();
-	const restarted = await adapter();
-	t.after(() => restarted.close());
+	const restarted = await f.createAdapter(acpConfig);
 	await restarted.discover(f.cwd);
 	assert.equal(f.http.counts.refreshes, 1);
 	await restarted.close();
-	await exec(piBinary, ["mcp", "logout", name], options);
+	await exec(piPath, ["mcp", "logout", name], options);
 	assert.equal((await f.read())[f.key], undefined);
 	f.http.expire();
 	await login();
-	const reauthorized = await adapter();
-	t.after(() => reauthorized.close());
+	const reauthorized = await f.createAdapter(acpConfig);
 	await reauthorized.discover(f.cwd);
 	assert.equal(f.http.counts.exchanges, 2);
 	assert.deepEqual((await f.read())[otherKey], other);

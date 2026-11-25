@@ -23,7 +23,7 @@ import {
 	McpOAuthProvider,
 	McpRefreshLockBusyError,
 } from "@earendil-works/pi-mcp/oauth";
-import lockfile from "proper-lockfile";
+import lockfile, { type LockOptions } from "proper-lockfile";
 import { McpOAuthStoreError, piMcpStore } from "../dist/mcp-oauth-store.js";
 
 const name = "project-docs";
@@ -120,12 +120,32 @@ test("fails closed on malformed store, malformed selected entry, and URL mismatc
 				tokens: { access_token: sentinel, token_type: 2 },
 			},
 		}),
-		JSON.stringify({
-			[key]: {
-				serverUrl: url,
-				discovery: { authorizationServerUrl: sentinel },
+		...[
+			{
+				tokens: {
+					access_token: sentinel,
+					token_type: "Bearer",
+					refresh_token: {},
+				},
 			},
-		}),
+			{ tokens: { access_token: sentinel, token_type: "Bearer", scope: [] } },
+			...[
+				{ authorizationServerUrl: sentinel },
+				{
+					authorizationServerMetadata: { token_endpoint: "file:///tmp/token" },
+				},
+				{
+					authorizationServerMetadata: {
+						token_endpoint: url,
+						token_endpoint_auth_methods_supported: "none",
+					},
+				},
+				{ resourceMetadata: { resource: url, scopes_supported: {} } },
+				{ resourceMetadata: { resource: sentinel } },
+			].map((discovery) => ({
+				discovery: { authorizationServerUrl: url, ...discovery },
+			})),
+		].map((fields) => JSON.stringify({ [key]: { serverUrl: url, ...fields } })),
 	];
 	for (const content of records) {
 		await seed(content);
@@ -162,6 +182,36 @@ test("fails closed on malformed store, malformed selected entry, and URL mismatc
 		safeStoreError("identity-mismatch"),
 	);
 	assert.equal(await readFile(path, "utf8"), fixture);
+});
+
+test("passes through state that only Pi sign-in or eager refresh consumes", async (t) => {
+	const { dir, path, seed, store } = await setup(t);
+	await mkdir(dir, { mode: 0o700 });
+	const states = JSON.parse(fixture);
+	const current = states[key];
+	const state = {
+		...current,
+		oauthState: { opaque: "pending-sign-in" },
+		codeVerifier: null,
+		tokensExpireAt: "legacy-expiry",
+		tokens: { ...current.tokens, id_token: { opaque: "id" } },
+		discovery: {
+			...current.discovery,
+			resourceMetadataUrl: null,
+			authorizationServerMetadata: {
+				token_endpoint: "https://auth.example.test/token",
+			},
+		},
+	};
+	await seed(JSON.stringify({ ...states, [key]: state }));
+	assert.deepEqual(await store.load(), state);
+	const loaded = await store.load();
+	assert.ok(loaded);
+	await store.save(loaded);
+	assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
+		...states,
+		[key]: state,
+	});
 });
 
 test("updates in place, preserves unrelated and opaque state, and honors Pi token invalidation", async (t) => {
@@ -313,6 +363,28 @@ test("file transactions wait asynchronously on Pi's realpath lock in a separate 
 	await tick;
 	await release();
 	assert.deepEqual(await store.load(), JSON.parse(fixture)[key]);
+});
+
+test("a compromised file lock prevents writes and still releases", async (t) => {
+	const { dir, path, seed, store } = await setup(t);
+	await mkdir(dir, { mode: 0o700 });
+	await seed();
+	const release = t.mock.fn(async () => {});
+	t.mock.method(
+		lockfile,
+		"lock",
+		async (_path: string, options?: LockOptions) => {
+			assert.ok(options?.onCompromised);
+			options.onCompromised(new Error(sentinel));
+			return release;
+		},
+	);
+	await assert.rejects(
+		async () => store.save({ serverUrl: url }),
+		safeStoreError("io"),
+	);
+	assert.equal(release.mock.callCount(), 1);
+	assert.equal(await readFile(path, "utf8"), fixture);
 });
 
 test("waits behind Pi's per-server refresh lock and sees the peer's rotation", {
