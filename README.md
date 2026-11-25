@@ -53,7 +53,21 @@ PID_ACP_PROVIDERS=/provider.mts PID_ACP_MODEL=example-model node dist/main.js
 
 Each trusted module default-exports one Pi AI provider. To load more than one, set `PID_ACP_PROVIDERS='["/provider.mts","/other.mts"]'`. For duplicate provider IDs, the last module wins.
 
-The default applies to new sessions only. Saved sessions require their original provider and model.
+Example `provider.mts`:
+
+```ts
+import { createProvider } from "@earendil-works/pi-ai";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+
+export default createProvider({
+  id: "example",
+  name: "Example",
+  baseUrl: "https://api.example.com/v1",
+  api: openAICompletionsApi(),
+  models: [{ id: "example-model" /* add Pi AI model metadata */ }],
+  // Add authentication if required.
+});
+```
 
 ### User extension sketch
 
