@@ -201,7 +201,7 @@ test("unsupported active features fail actionably; disabled entries and inert ex
 	);
 });
 
-test("HTTP OAuth opts into a literal public client", async (t) => {
+test("HTTP OAuth opts into a saved grant with or without a literal client ID", async (t) => {
 	const f = await fixture(t);
 	const oauth = {
 		clientId: "public-fixture",
@@ -211,16 +211,23 @@ test("HTTP OAuth opts into a literal public client", async (t) => {
 	};
 	const entry = { url: "https://example.test/mcp", oauth };
 	const config = { mcpServers: { "fixture-docs": entry } };
-	const [server] = (await f.load(config)).servers;
-	assert.ok(server?.kind === "http");
-	assert.deepEqual(server.config.oauth, oauth);
+	for (const settings of [oauth, {}, { scope: "offline_access" }]) {
+		const [server] = (
+			await f.load({
+				mcpServers: { fixture: { ...entry, oauth: settings } },
+			})
+		).servers;
+		assert.ok(server?.kind === "http");
+		assert.deepEqual(server.config.oauth, settings);
+	}
 	for (const invalid of [
 		{ ...entry, url: "http://example.test/mcp" },
 		{ ...entry, url: "https://user:SECRET@example.test/mcp" },
 		{ ...entry, url: "https://example.test/mcp#SECRET" },
 		{ ...entry, url: "https://example.test/mcp#" },
 		{ ...entry, headers: { aUtHoRiZaTiOn: "SECRET" } },
-		{ ...entry, oauth: {} },
+		{ ...entry, oauth: { clientRegistration: "dcr" } },
+		{ command: "fixture", oauth: {} },
 		...[
 			{ clientId: "  " },
 			{ clientId: "!SECRET" },

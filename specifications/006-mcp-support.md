@@ -127,25 +127,35 @@ authentication. All HTTP transports reject redirects.
 
 ### Pi-bootstrapped OAuth
 
-An HTTP `oauth` entry must specify a literal pre-registered public `clientId` and
-may include Pi's `scope`, `callbackPort` and `callbackUrl` sign-in settings. Reject
-confidential/dynamic clients, client metadata documents, issuer overrides, custom
-auth providers, Authorization header conflicts, enabled namespace aliases that
-involve OAuth, and non-loopback cleartext OAuth endpoints.
+An HTTP `oauth` entry opts in to a Pi grant. It may include a literal pre-registered
+public `clientId` and Pi's `scope`, `callbackPort` and `callbackUrl` sign-in settings.
+Use `"oauth": {}` to reuse a Pi dynamic registration without copying the client ID.
+Reject configured client secrets, registration hints, client metadata documents,
+issuer overrides, custom auth providers, Authorization header conflicts, enabled
+namespace aliases involving OAuth, and non-loopback cleartext OAuth endpoints.
+If Pi needs a `clientRegistration: "dcr"` hint, set it only in Pi's configuration.
 
 Use the actual private Pi named store at `PID_ACP_MCP_AUTH_FILE` or
 `~/.pi/agent/mcp-auth.json`, keyed by namespace and normalized URL. Never migrate
-URL-only records. Require a renewable bearer grant. The operator must bootstrap
-with the same name, URL, and client ID; Pi does not normally record a configured
-ID in the grant. Stop or drain all refreshers before login, logout, or
-reauthorization; the browser flow is not covered by the refresh lock.
+URL-only records. Bootstrap in Pi with the same server name and URL. Require a
+renewable bearer grant. With a configured client ID, bootstrap with that same
+ID and reject grants containing saved client information; Pi does not normally
+record a configured ID in the grant. Without a configured client ID, require
+usable saved client information. Let pi-mcp select and apply authentication
+using that registration, including any saved secret. Preserve the registration
+and opaque store data across rotation, except when invalidated by pi-mcp.
+
+Stop or drain all refreshers before login, logout, or reauthorization; the
+browser flow is not covered by the refresh lock.
 
 Share one provider per server across process discovery and conversation clients.
 Supply tokens from the store without expiry refresh; delegate challenge recovery
-to pi-mcp using redirect-rejecting fetch for discovery and token requests. Keep
-refreshes serialized using Pi-compatible locks. No browser flow in pid-acp.
-Give safe login/restart guidance on missing or revoked authorization, distinct
-from store/configuration, lock or other transport failures.
+to pi-mcp using the saved issuer metadata and token endpoint. Never follow
+redirects or rediscover endpoints from the challenge. Serialize refreshes using
+Pi-compatible locks. pid-acp never registers or starts a browser flow. Give safe
+login/restart guidance for missing or unusable authorization, distinct from
+store/configuration, lock or transport failures. Never include registered client
+secrets in errors.
 
 ### Fixed setup and discovery
 
@@ -285,9 +295,11 @@ live model tests opt-in.
   healthy client, load rollback and child escalation. Assert no leaked fixture
   children or secrets.
 - Use synthetic grants and loopback MCP/authorization servers to verify Pi CLI
-  bootstrap and reauthorization, disk restart, rotation with cross-process
-  contention, concurrent conversations, redirect rejection, cancellation/shutdown,
-  and redaction in diagnostics and saved output.
+  bootstrap and reauthorization for a pre-registered client. Verify a no-ID Pi
+  bootstrap registers once, tool execution succeeds, a refresh uses the saved
+  secret, and restart reuses the registration and rotated grant. Cover missing
+  and rejected registrations, cross-process contention, concurrent conversations,
+  redirect rejection, cancellation/shutdown, and diagnostic and output redaction.
 - Run npm ci, build, strict source/test typecheck, lint, format and full
   deterministic suites. Record outcomes in the PR, not repository documents.
 

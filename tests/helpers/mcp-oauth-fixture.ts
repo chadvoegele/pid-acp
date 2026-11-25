@@ -12,6 +12,12 @@ import { fixtureTool } from "./mcp-fixture.ts";
 export const clientId = "fixture-public-client";
 export const privateOAuthMarker = /PRIVATE_OAUTH_/;
 const authorizationCode = "PRIVATE_OAUTH_CODE";
+export const registeredClient = {
+	client_id: "fixture-registered-client",
+	client_secret: "PRIVATE_OAUTH_REGISTERED_SECRET",
+	token_endpoint_auth_method: "client_secret_post",
+	fixture_extension: { metadata: "keep" },
+};
 
 export async function listenOAuthFixture(
 	t: TestContext,
@@ -42,7 +48,14 @@ async function readBody(request: IncomingMessage) {
 	return body;
 }
 
-export async function startMcpOAuthFixture(t: TestContext) {
+export async function startMcpOAuthFixture(
+	t: TestContext,
+	mode: "explicit" | "dynamic" = "explicit",
+) {
+	const dynamic = mode === "dynamic";
+	const expectedClient = dynamic ? registeredClient.client_id : clientId;
+	let registrations = 0;
+	let registeredRedirect: string | undefined;
 	let generation = 0;
 	let accessValid = false;
 	let pkce: string | null = null;
@@ -69,19 +82,33 @@ export async function startMcpOAuthFixture(t: TestContext) {
 	let exchanges = 0;
 	let effects = 0;
 	const behavior: {
-		refresh?: "revoked";
+		refresh?: "invalid_grant" | "invalid_client" | "unauthorized_client";
 		resourceMetadataUrl?: string;
 		tokenRedirect?: { target: string; status: number };
 		pause?: Promise<void>;
 		pauseToolChallenge?: Promise<void>;
 		failCall?: boolean;
 	} = {};
+	async function register(request: IncomingMessage, response: ServerResponse) {
+		const { redirect_uris } = JSON.parse(await readBody(request));
+		const redirect = URL.parse(redirect_uris?.[0] ?? "");
+		if (
+			!redirect ||
+			redirect.protocol !== "http:" ||
+			redirect.hostname !== "127.0.0.1" ||
+			request.method !== "POST"
+		)
+			return response.writeHead(400).end();
+		registeredRedirect = redirect.href;
+		return sendJson(response, { ...registeredClient, redirect_uris }, 201);
+	}
 	function authorize(endpoint: URL, response: ServerResponse) {
 		const redirect = URL.parse(endpoint.searchParams.get("redirect_uri") ?? "");
 		if (
 			!redirect ||
 			redirect.hostname !== "127.0.0.1" ||
-			endpoint.searchParams.get("client_id") !== clientId ||
+			(dynamic && redirect.href !== registeredRedirect) ||
+			endpoint.searchParams.get("client_id") !== expectedClient ||
 			endpoint.searchParams.get("scope") !== "offline_access" ||
 			endpoint.searchParams.get("code_challenge_method") !== "S256"
 		)
@@ -102,8 +129,9 @@ export async function startMcpOAuthFixture(t: TestContext) {
 	) {
 		const form = new URLSearchParams(await readBody(request));
 		if (
-			form.get("client_id") !== clientId ||
-			form.has("client_secret") ||
+			form.get("client_id") !== expectedClient ||
+			form.get("client_secret") !==
+				(dynamic ? registeredClient.client_secret : null) ||
 			request.headers.authorization
 		)
 			return sendJson(response, { error: "invalid_client" }, 400);
@@ -130,14 +158,15 @@ export async function startMcpOAuthFixture(t: TestContext) {
 				})
 				.end();
 		if (
-			behavior.refresh === "revoked" ||
+			behavior.refresh ||
 			form.get("refresh_token") !== tokens().refresh_token
 		)
 			return sendJson(
 				response,
 				{
-					error: "invalid_grant",
-					error_description: "PRIVATE_OAUTH_REVOKED_BODY",
+					error: behavior.refresh ?? "invalid_grant",
+					error_description:
+						"PRIVATE_OAUTH_REJECTED_BODY " + registeredClient.client_secret,
 				},
 				400,
 			);
@@ -199,6 +228,10 @@ export async function startMcpOAuthFixture(t: TestContext) {
 			});
 		if (pathname === "/.well-known/oauth-authorization-server")
 			return sendJson(response, authorizationServerMetadata);
+		if (pathname === "/register") {
+			registrations++;
+			if (dynamic) return register(request, response);
+		}
 		if (pathname === "/authorize") return authorize(endpoint, response);
 		if (pathname === "/token") return exchangeToken(request, response);
 		if (pathname === "/mcp") return handleMcp(request, response);
@@ -210,8 +243,11 @@ export async function startMcpOAuthFixture(t: TestContext) {
 		issuer: origin,
 		authorization_endpoint: `${origin}/authorize`,
 		token_endpoint: `${origin}/token`,
+		...(dynamic ? { registration_endpoint: `${origin}/register` } : {}),
 		response_types_supported: ["code"],
-		token_endpoint_auth_methods_supported: ["none"],
+		token_endpoint_auth_methods_supported: dynamic
+			? ["client_secret_basic", "client_secret_post", "none"]
+			: ["none"],
 		code_challenge_methods_supported: ["S256"],
 	};
 	return {
@@ -228,6 +264,9 @@ export async function startMcpOAuthFixture(t: TestContext) {
 		deleted,
 		expire: () => {
 			accessValid = false;
+		},
+		get registrations() {
+			return registrations;
 		},
 		get counts() {
 			return { refreshes, exchanges, effects };

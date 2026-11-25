@@ -6,8 +6,9 @@ import {
 	OAuthError,
 	parseWwwAuthenticate,
 	type McpAuthProvider,
+	type McpOAuthState,
 } from "@earendil-works/pi-mcp/oauth";
-import { isSecureMcpOAuthUrl, type PublicMcpOAuth } from "./mcp-config.js";
+import { isSecureMcpOAuthUrl, type McpOAuthOptions } from "./mcp-config.js";
 import { McpOAuthStoreError, piMcpStore } from "./mcp-oauth-store.js";
 
 export type McpOAuthFailure = "client" | "store" | "busy" | "refresh" | "login";
@@ -18,7 +19,8 @@ class RefreshSaveError extends OAuthError {
 		super("pid_acp_store_error", "Could not save Pi OAuth state");
 	}
 }
-class MissingRefreshEndpointError extends Error {}
+// pi-mcp propagates TypeError from resource discovery instead of falling back.
+class MissingRefreshEndpointError extends TypeError {}
 class UnsupportedClientError extends Error {}
 class RefreshFailedError extends Error {}
 
@@ -37,25 +39,61 @@ export function oauthFailure(error: unknown): McpOAuthFailure | undefined {
 		return "login";
 }
 
+function isNonemptyString(value: unknown) {
+	return typeof value === "string" && value.trim() !== "";
+}
+
+function hasUsableRegistration(value: unknown) {
+	if (typeof value !== "object" || value === null || Array.isArray(value))
+		return false;
+	const {
+		client_id,
+		client_secret,
+		token_endpoint_auth_method,
+		redirect_uris,
+	} = value as Record<string, unknown>;
+	const hasSecret = isNonemptyString(client_secret);
+	return (
+		isNonemptyString(client_id) &&
+		(client_secret === undefined || hasSecret) &&
+		(token_endpoint_auth_method === undefined ||
+			token_endpoint_auth_method === "none" ||
+			(hasSecret &&
+				(token_endpoint_auth_method === "client_secret_basic" ||
+					token_endpoint_auth_method === "client_secret_post"))) &&
+		(redirect_uris === undefined ||
+			(Array.isArray(redirect_uris) &&
+				redirect_uris.every((uri) => typeof uri === "string")))
+	);
+}
+
+function requireGrant(
+	state: McpOAuthState | undefined,
+	clientId: string | undefined,
+) {
+	const tokens = state?.tokens;
+	const registration = state?.clientInformation;
+	if (
+		(clientId !== undefined && registration !== undefined) ||
+		(tokens && tokens.token_type.toLowerCase() !== "bearer")
+	)
+		throw new UnsupportedClientError();
+	if (
+		!tokens?.refresh_token ||
+		(clientId === undefined && !hasUsableRegistration(registration))
+	)
+		throw new McpOAuthAuthorizationRequiredError();
+	return tokens;
+}
+
 export function piMcpAuthProvider(
 	authFile: string,
 	name: string,
 	url: string,
-	settings: PublicMcpOAuth,
+	settings: McpOAuthOptions,
 	isStopping: () => boolean,
 ): McpAuthProvider {
 	const store = piMcpStore(authFile, name, url);
-	const loadPublicState = async () => {
-		const state = await store.load();
-		// Pi does not persist client information for a configured client. Any
-		// existing registration may belong to a different grant or client mode.
-		if (
-			state?.clientInformation !== undefined ||
-			(state?.tokens && state.tokens.token_type.toLowerCase() !== "bearer")
-		)
-			throw new UnsupportedClientError();
-		return state;
-	};
 	const provider = createMcpAuthProvider({
 		serverUrl: url,
 		clientName: "pid-acp",
@@ -63,10 +101,12 @@ export function piMcpAuthProvider(
 		onChallenge: () => {},
 		store: {
 			...store,
-			load: loadPublicState,
 			withRefreshLock(refresh) {
 				return store.withRefreshLock(async () => {
-					const discovery = (await loadPublicState())?.discovery;
+					const state = await store.load();
+					// Validate at entry, not on upstream reads between invalidation steps.
+					requireGrant(state, settings.clientId);
+					const discovery = state?.discovery;
 					const metadata = discovery?.authorizationServerMetadata;
 					for (const value of [
 						discovery?.authorizationServerUrl,
@@ -94,10 +134,7 @@ export function piMcpAuthProvider(
 		async token() {
 			// Never call upstream token(): its eager refresh uses global fetch.
 			await provider.settled();
-			const tokens = (await loadPublicState())?.tokens;
-			if (!tokens?.refresh_token)
-				throw new McpOAuthAuthorizationRequiredError();
-			return tokens.access_token;
+			return requireGrant(await store.load(), settings.clientId).access_token;
 		},
 		async onUnauthorized(context) {
 			if (isStopping()) throw new Error("MCP is closing.");
@@ -105,6 +142,9 @@ export function piMcpAuthProvider(
 				await provider.onUnauthorized?.({
 					...context,
 					fetch: (input, init) => {
+						// A rejected client clears discovery; do not rediscover from the challenge.
+						if (init?.method !== "POST")
+							throw new MissingRefreshEndpointError();
 						if (!isSecureMcpOAuthUrl(new URL(input)))
 							throw new TypeError("Insecure OAuth endpoint");
 						return context.fetch(input, { ...init, redirect: "error" });
@@ -119,8 +159,7 @@ export function piMcpAuthProvider(
 					context.response.headers.get("www-authenticate"),
 				);
 				if (challenge.error === "insufficient_scope") throw error;
-				const tokens = (await loadPublicState())?.tokens;
-				if (!tokens?.refresh_token) throw error;
+				requireGrant(await store.load(), settings.clientId);
 				throw new RefreshFailedError();
 			}
 		},

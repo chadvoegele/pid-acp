@@ -37,12 +37,12 @@ import {
 
 const oauthReasons = {
 	client:
-		"OAuth state is not for a supported pre-registered public client; check the Pi and pid-acp client configuration",
+		"OAuth state is incompatible with the configured client or does not contain bearer tokens; check the Pi and pid-acp OAuth configuration",
 	store:
 		"Pi OAuth store is invalid or inaccessible; check PID_ACP_MCP_AUTH_FILE, permissions and server identity",
 	busy: "Pi OAuth refresh lock is busy; let the other refresher finish",
 	refresh:
-		"OAuth refresh failed; check the authorization server and public client configuration",
+		"OAuth refresh failed; check the authorization server and OAuth client configuration",
 };
 
 function oauthGuidance(name: string, failure: McpOAuthFailure) {

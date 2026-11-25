@@ -11,15 +11,15 @@ import {
 export type McpConfigPath = { path: string; required: boolean };
 type McpExposure = "codemode" | "hidden";
 type ValidatedServer = Exclude<McpServerConfigResult, { kind: "invalid" }>;
-export type PublicMcpOAuth = Pick<
+export type McpOAuthOptions = Pick<
 	McpOAuthConfig,
-	"scope" | "callbackPort" | "callbackUrl"
-> & { clientId: string };
+	"clientId" | "scope" | "callbackPort" | "callbackUrl"
+>;
 export type McpServer = ValidatedServer & {
 	name: string;
 	config: {
 		exposure: McpExposure;
-		oauth?: PublicMcpOAuth;
+		oauth?: McpOAuthOptions;
 		toolExposure?: Record<string, McpExposure>;
 	};
 };
@@ -121,7 +121,7 @@ export function isSecureMcpOAuthUrl(url: URL) {
 	);
 }
 
-function readPublicOAuth(server: ValidatedServer): PublicMcpOAuth | undefined {
+function readOAuth(server: ValidatedServer): McpOAuthOptions | undefined {
 	if (server.config.oauth === undefined) return undefined;
 	if (
 		server.kind !== "http" ||
@@ -139,7 +139,7 @@ function readPublicOAuth(server: ValidatedServer): PublicMcpOAuth | undefined {
 		rejectConfig("OAuth cannot be combined with an Authorization header.");
 	const { clientId, scope, ...options } = oauth;
 	if (
-		!clientId?.trim() ||
+		(clientId !== undefined && !clientId.trim()) ||
 		[clientId, scope].some(
 			(value) =>
 				value !== undefined &&
@@ -150,9 +150,9 @@ function readPublicOAuth(server: ValidatedServer): PublicMcpOAuth | undefined {
 		)
 	)
 		rejectConfig(
-			"OAuth requires a literal pre-registered public clientId; only scope, callbackPort and callbackUrl may also be set.",
+			"OAuth accepts only a literal optional clientId, scope, callbackPort and callbackUrl.",
 		);
-	return { ...oauth, clientId };
+	return oauth;
 }
 
 function validateLocalFields(config: Record<string, unknown>) {
@@ -188,7 +188,7 @@ function validateServer(name: string, raw: unknown): ValidatedServer {
 function bindServer(
 	name: string,
 	server: ValidatedServer,
-	oauth: PublicMcpOAuth | undefined,
+	oauth: McpOAuthOptions | undefined,
 	env: NodeJS.ProcessEnv,
 ): McpServer | BlockedMcpServer {
 	const { config } = server;
@@ -242,7 +242,7 @@ export async function loadMcpConfig(
 	)) {
 		if (isRecord(raw) && raw.enabled === false) continue;
 		const server = validateServer(name, raw);
-		const oauth = readPublicOAuth(server);
+		const oauth = readOAuth(server);
 		const namespace = mcpNamespace(name);
 		const previous = namespaces.get(namespace);
 		if (previous !== undefined && (previous || oauth !== undefined))

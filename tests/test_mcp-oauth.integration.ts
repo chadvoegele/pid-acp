@@ -15,6 +15,7 @@ import {
 	clientId,
 	listenOAuthFixture,
 	privateOAuthMarker,
+	registeredClient,
 	startMcpOAuthFixture,
 } from "./helpers/mcp-oauth-fixture.ts";
 import { persistenceFixture } from "./helpers/persistence.ts";
@@ -29,9 +30,12 @@ const toolPrompt = JSON.stringify({
 	args: { code: "text(await tools.mcp__project_docs__mutate({}));" },
 });
 
-async function setup(t: TestContext) {
+async function setup(
+	t: TestContext,
+	mode: "explicit" | "dynamic" = "explicit",
+) {
 	const disk = await persistenceFixture(t);
-	const http = await startMcpOAuthFixture(t);
+	const http = await startMcpOAuthFixture(t, mode);
 	const dir = join(disk.root, "agent");
 	const home = join(disk.root, "home");
 	await mkdir(dir, { mode: 0o700 });
@@ -39,7 +43,10 @@ async function setup(t: TestContext) {
 	const authFile = join(dir, "mcp-auth.json");
 	const path = join(dir, "mcp.json");
 	const key = `mcp__project_docs|${http.url}`;
-	const entry = { url: http.url, oauth: { clientId, scope: "offline_access" } };
+	const entry = {
+		url: http.url,
+		oauth: mode === "dynamic" ? {} : { clientId, scope: "offline_access" },
+	};
 	await writeFile(path, JSON.stringify({ mcpServers: { [name]: entry } }));
 	const env = {
 		PID_ACP_MCP_CONFIG: path,
@@ -117,8 +124,8 @@ test("discovery sends the stored bearer for an expired grant without refreshing 
 	assert.deepEqual((await f.read())[otherKey], other);
 });
 
-test("refresh uses only the endpoint saved during login, not challenge discovery", async (t) => {
-	const f = await setup(t);
+test("dynamic refresh uses only the endpoint saved during login, not challenge discovery", async (t) => {
+	const f = await setup(t, "dynamic");
 	let discoveryRequests = 0;
 	const target = await listenOAuthFixture(t, (_req, res) => {
 		discoveryRequests++;
@@ -130,7 +137,11 @@ test("refresh uses only the endpoint saved during login, not challenge discovery
 		undefined,
 		{ authorizationServerUrl: f.http.discovery.authorizationServerUrl },
 	]) {
-		await f.seed({ discovery, tokens: f.http.issue() });
+		await f.seed({
+			discovery,
+			tokens: f.http.issue(),
+			clientInformation: registeredClient,
+		});
 		assert.equal((await adapter.discover(f.cwd)).tools.length, 1);
 		f.http.expire();
 		await assert.rejects(
@@ -140,7 +151,7 @@ test("refresh uses only the endpoint saved during login, not challenge discovery
 		assert.equal(f.http.counts.refreshes, 0);
 		assert.equal(discoveryRequests, 0);
 	}
-	await f.seed({ tokens: f.http.issue() });
+	await f.seed({ tokens: f.http.issue(), clientInformation: registeredClient });
 	f.http.expire();
 	assert.equal((await adapter.discover(f.cwd)).tools.length, 1);
 	assert.equal(f.http.counts.refreshes, 1);
@@ -149,8 +160,8 @@ test("refresh uses only the endpoint saved during login, not challenge discovery
 
 for (const status of [307, 308]) {
 	test(`OAuth token ${status} redirect never reaches a second origin`, async (t) => {
-		const f = await setup(t);
-		await f.seed();
+		const f = await setup(t, "dynamic");
+		await f.seed({ clientInformation: registeredClient });
 		let forwarded = 0;
 		const target = await listenOAuthFixture(t, (_req, res) => {
 			forwarded++;
@@ -180,21 +191,13 @@ test("missing, legacy and nonrenewable grants fail before dispatch with login gu
 	await assert.rejects(adapter.discover(f.cwd), login);
 	await f.seed({ tokens: { ...f.state.tokens, refresh_token: undefined } });
 	await assert.rejects(adapter.discover(f.cwd), login);
-	await f.seed({
-		clientInformation: {
-			client_id: clientId,
-			client_secret: "PRIVATE_OAUTH_SECRET",
-		},
-	});
-	await assert.rejects(
-		adapter.discover(f.cwd),
-		safeFailure(/supported pre-registered public client/),
-	);
-	await f.seed({ clientInformation: { client_id: "other-public-client" } });
-	await assert.rejects(
-		adapter.discover(f.cwd),
-		safeFailure(/supported pre-registered public client/),
-	);
+	for (const client_id of [clientId, "other-public-client"]) {
+		await f.seed({ clientInformation: { ...registeredClient, client_id } });
+		await assert.rejects(
+			adapter.discover(f.cwd),
+			safeFailure(/incompatible with the configured client/),
+		);
+	}
 	await f.seed({ serverUrl: "https://different.example/mcp" });
 	await assert.rejects(
 		adapter.discover(f.cwd),
@@ -226,6 +229,78 @@ test("missing, legacy and nonrenewable grants fail before dispatch with login gu
 	assert.equal(f.http.requests.length, 0);
 });
 
+test("missing or unusable dynamic registration fails before any request with login guidance", async (t) => {
+	const f = await setup(t, "dynamic");
+	const adapter = await f.createAdapter();
+	for (const clientInformation of [
+		undefined,
+		null,
+		"PRIVATE_OAUTH_NOT_AN_OBJECT",
+		[],
+		{},
+		{ client_id: "   " },
+		{ ...registeredClient, client_secret: "   " },
+		{ ...registeredClient, client_secret: {} },
+		{ ...registeredClient, client_secret: undefined },
+		{ ...registeredClient, token_endpoint_auth_method: "private_key_jwt" },
+		{ ...registeredClient, redirect_uris: null },
+	]) {
+		await f.seed({ clientInformation });
+		await assert.rejects(
+			adapter.discover(f.cwd),
+			safeFailure(
+				/stop all refreshers.*pi mcp login project-docs.*restart pid-acp/,
+			),
+		);
+	}
+	assert.equal(f.http.requests.length, 0);
+	assert.equal(f.http.registrations, 0);
+});
+
+for (const rejection of [
+	"invalid_client",
+	"unauthorized_client",
+	"invalid_grant",
+] as const) {
+	test(`dynamic refresh handles ${rejection} and preserves pending sign-in state`, async (t) => {
+		const f = await setup(t, "dynamic");
+		const pending = {
+			codeVerifier: "PRIVATE_OAUTH_VERIFIER",
+			oauthState: "PRIVATE_OAUTH_STATE",
+		};
+		await f.seed({ clientInformation: registeredClient, ...pending });
+		let rediscovery = 0;
+		f.http.behavior.resourceMetadataUrl = await listenOAuthFixture(
+			t,
+			(_req, res) => {
+				rediscovery++;
+				res.writeHead(404).end();
+			},
+		);
+		f.http.behavior.refresh = rejection;
+		f.http.expire();
+		const adapter = await f.createAdapter();
+		const login = safeFailure(
+			/stop all refreshers.*pi mcp login project-docs.*restart pid-acp/,
+		);
+		await assert.rejects(adapter.discover(f.cwd), login);
+		const saved = (await f.read())[f.key];
+		assert.equal(saved.tokens, undefined);
+		assert.equal(saved.tokensExpireAt, undefined);
+		assert.deepEqual(
+			saved.clientInformation,
+			rejection === "invalid_grant" ? registeredClient : undefined,
+		);
+		if (rejection !== "invalid_grant") assert.equal(saved.discovery, undefined);
+		assert.equal(saved.codeVerifier, pending.codeVerifier);
+		assert.equal(saved.oauthState, pending.oauthState);
+		await assert.rejects(adapter.discover(f.cwd), login);
+		assert.equal(f.http.counts.refreshes, 1);
+		assert.equal(f.http.registrations, 0);
+		assert.equal(rediscovery, 0);
+	});
+}
+
 test("conversation setup keeps healthy servers usable and retains a safe OAuth failure", async (t) => {
 	const f = await setup(t);
 	const healthy = await startMcpHttpFixture();
@@ -256,8 +331,8 @@ test("conversation setup keeps healthy servers usable and retains a safe OAuth f
 test("two concurrent ACP conversations share one rotation, with one post-auth effect per call and no retry of ambiguous failures", {
 	timeout: 20_000,
 }, async (t) => {
-	const f = await setup(t);
-	await f.seed();
+	const f = await setup(t, "dynamic");
+	await f.seed({ clientInformation: registeredClient });
 	const client = await f.client();
 	const newSession = () =>
 		client.request("session/new", { cwd: f.cwd, mcpServers: [] });
@@ -315,7 +390,7 @@ test("two concurrent ACP conversations share one rotation, with one post-auth ef
 	);
 
 	f.http.behavior.failCall = false;
-	f.http.behavior.refresh = "revoked";
+	f.http.behavior.refresh = "invalid_grant";
 	f.http.expire();
 	const revoked = client.updates.length;
 	await client.prompt(toolPrompt, b.sessionId);
@@ -387,14 +462,9 @@ test("ACP cancellation and orderly EOF join an uncancellable rotation without re
 	assert.deepEqual((await f.read())[otherKey], other);
 });
 
-test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-process rotation", {
-	skip: !piBinary && "set PID_ACP_TEST_PI to a Pi CLI executable",
-	timeout: 30_000,
-}, async (t) => {
+async function setupPiCli(f: Awaited<ReturnType<typeof setup>>) {
+	assert.ok(piBinary);
 	const piPath = piBinary;
-	assert.ok(piPath);
-	const f = await setup(t);
-	f.http.expire();
 	const browserShimDir = join(f.home, "bin");
 	await mkdir(browserShimDir);
 	// Never run a browser on the host. Drive the mock approval and real loopback callback below.
@@ -410,22 +480,7 @@ test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-
 			PI_CODING_AGENT_DIR: f.dir,
 		},
 	};
-	// Add a marker only to the Pi-side config to identify which process dispatched a request.
-	await writeFile(
-		join(f.dir, "mcp.json"),
-		JSON.stringify({
-			mcpServers: {
-				[name]: { ...f.entry, headers: { "X-Fixture-Peer": "pi" } },
-			},
-		}),
-	);
-	// pid-acp deliberately selects a different config file but the exact same live store.
-	const acpConfig = join(f.root, "pid-acp-mcp.json");
-	await writeFile(
-		acpConfig,
-		JSON.stringify({ mcpServers: { [name]: f.entry } }),
-	);
-	const login = async () => {
+	async function login() {
 		const pending = exec(
 			piPath,
 			["mcp", "login", name, "--timeout", "7"],
@@ -454,7 +509,89 @@ test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-
 				pending.child.kill();
 			await pending.catch(() => undefined);
 		}
-	};
+	}
+	return { login, piPath, options };
+}
+
+test("Pi CLI registers once; pid-acp calls tools, rotates with the saved secret and restarts", {
+	skip: !piBinary && "set PID_ACP_TEST_PI to a Pi CLI executable",
+	timeout: 30_000,
+}, async (t) => {
+	const f = await setup(t, "dynamic");
+	const { login } = await setupPiCli(f);
+	await login();
+	assert.equal(f.http.registrations, 1);
+	assert.equal((await stat(f.authFile)).mode & 0o777, 0o600);
+	const records = await f.read();
+	const original = records[f.key];
+	assert.equal(original.clientInformation.redirect_uris.length, 1);
+	assert.deepEqual(original.clientInformation, {
+		...registeredClient,
+		redirect_uris: original.clientInformation.redirect_uris,
+	});
+	assert.equal(original.tokens.refresh_token, f.http.tokens().refresh_token);
+	await f.write({ ...records, [otherKey]: other });
+
+	type Client = Awaited<ReturnType<typeof f.client>>;
+	const newSession = async (client: Client) =>
+		(await client.request("session/new", { cwd: f.cwd, mcpServers: [] }))
+			.sessionId;
+	async function callTool(client: Client, sessionId: string) {
+		const start = client.updates.length;
+		await client.prompt(toolPrompt, sessionId);
+		await client.waitForAnswer(
+			(text) => text.includes("structuredContent"),
+			start,
+		);
+		assert.doesNotMatch(
+			JSON.stringify(client.wire) + client.stderr,
+			privateOAuthMarker,
+		);
+	}
+	const first = await f.client();
+	const sessionId = await newSession(first);
+	await callTool(first, sessionId);
+	assert.deepEqual(f.http.counts, { refreshes: 0, exchanges: 1, effects: 1 });
+	f.http.expire();
+	await callTool(first, sessionId);
+	await first.close();
+	assert.deepEqual(f.http.counts, { refreshes: 1, exchanges: 1, effects: 2 });
+
+	const rotated = (await f.read())[f.key];
+	assert.notEqual(rotated.tokens.refresh_token, original.tokens.refresh_token);
+	assert.equal(rotated.tokens.refresh_token, f.http.tokens().refresh_token);
+	assert.deepEqual(rotated.clientInformation, original.clientInformation);
+	const restarted = await f.client();
+	await callTool(restarted, await newSession(restarted));
+	await restarted.close();
+	assert.deepEqual(f.http.counts, { refreshes: 1, exchanges: 1, effects: 3 });
+	assert.equal(f.http.registrations, 1);
+	assert.deepEqual((await f.read())[f.key], rotated);
+	assert.deepEqual((await f.read())[otherKey], other);
+});
+
+test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-process rotation", {
+	skip: !piBinary && "set PID_ACP_TEST_PI to a Pi CLI executable",
+	timeout: 30_000,
+}, async (t) => {
+	const f = await setup(t);
+	const { login, piPath, options } = await setupPiCli(f);
+	f.http.expire();
+	// Add a marker only to the Pi-side config to identify which process dispatched a request.
+	await writeFile(
+		join(f.dir, "mcp.json"),
+		JSON.stringify({
+			mcpServers: {
+				[name]: { ...f.entry, headers: { "X-Fixture-Peer": "pi" } },
+			},
+		}),
+	);
+	// pid-acp deliberately selects a different config file but the exact same live store.
+	const acpConfig = join(f.root, "pid-acp-mcp.json");
+	await writeFile(
+		acpConfig,
+		JSON.stringify({ mcpServers: { [name]: f.entry } }),
+	);
 	await login();
 	const records = await f.read();
 	assert.equal(records[f.key].clientInformation, undefined);

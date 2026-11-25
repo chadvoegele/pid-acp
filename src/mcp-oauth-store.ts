@@ -99,11 +99,10 @@ function validateState(
 		throw new McpOAuthStoreError("invalid-state");
 	if (value.serverUrl !== serverUrl)
 		throw new McpOAuthStoreError("identity-mismatch");
-	const { tokens, discovery, clientInformation } = value;
+	const { tokens, discovery } = value;
 	if (
 		(tokens !== undefined && !hasValidTokens(tokens)) ||
-		(discovery !== undefined && !hasRefreshDiscovery(discovery)) ||
-		(clientInformation !== undefined && !isRecord(clientInformation))
+		(discovery !== undefined && !hasRefreshDiscovery(discovery))
 	)
 		throw new McpOAuthStoreError("invalid-state");
 }
