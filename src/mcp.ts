@@ -87,7 +87,7 @@ type ConnectionState = {
 type ConnectableServer = {
 	server: McpServer;
 	authProvider?: McpAuthProvider;
-	connections: Map<ConversationId | symbol, ConnectionState>;
+	connections: Map<ConversationId, ConnectionState>;
 };
 
 type ServerBinding = ConnectableServer | BlockedMcpServer;
@@ -135,12 +135,10 @@ export class McpAdapter {
 		const tools: ToolRegistration[] = [];
 		const namespaces: McpRegistration["namespaces"][number][] = [];
 		const taken = new Map<string, string>();
-		const discovery = Symbol();
 		for (const binding of this.servers) {
 			if ("issue" in binding) continue;
-			const { server, authProvider, connections } = binding;
+			const { server, authProvider } = binding;
 			const state: ConnectionState = {};
-			connections.set(discovery, state);
 			try {
 				const client = await this.connect(binding, state, cwd);
 				const definitions = client.serverCapabilities?.tools
@@ -161,11 +159,7 @@ export class McpAdapter {
 					`MCP server ${server.name}: startup discovery failed. ${failure ? `${oauthGuidance(server.name, failure)}.` : "Check its connection and tool schemas. Discovery uses the canonical process launch directory, not a saved workspace; configure an absolute server cwd if needed, then restart pid-acp."}`,
 				);
 			} finally {
-				try {
-					await state.client?.close();
-				} finally {
-					connections.delete(discovery);
-				}
+				await state.client?.close();
 			}
 		}
 		return { tools, namespaces };
