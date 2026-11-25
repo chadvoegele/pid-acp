@@ -26,7 +26,7 @@ export async function socketFixture(t: TestContext) {
 			execArgv: ["--import", "./tests/helpers/socket-observer.ts"],
 			env: {
 				...process.env,
-				PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/socket-provider.ts"),
+				PID_ACP_PROVIDERS: resolve("tests/helpers/socket-provider.ts"),
 				PID_ACP_MODEL: "faux-1",
 				PID_ACP_SOCKET_PATH: path,
 				PID_ACP_SESSIONS_DIR: join(cwd, "sessions"),

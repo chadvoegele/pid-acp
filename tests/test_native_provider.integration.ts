@@ -16,7 +16,7 @@ test("production delegates to an arbitrary native Pi AI provider without OpenAI 
 			live: true,
 			cwd,
 			env: {
-				PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/native-provider.ts"),
+				PID_ACP_PROVIDERS: resolve("tests/helpers/native-provider.ts"),
 				PID_ACP_MODEL: "faux-1",
 				PID_ACP_THINKING: "off",
 				PID_ACP_BASE_URL: undefined,

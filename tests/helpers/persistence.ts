@@ -71,9 +71,7 @@ export async function persistenceFixture(t: TestContext) {
 				live: true,
 				onUpdate,
 				env: {
-					PID_ACP_PROVIDER_CONFIG: resolve(
-						"tests/helpers/persistence-provider.ts",
-					),
+					PID_ACP_PROVIDERS: resolve("tests/helpers/persistence-provider.ts"),
 					PID_ACP_MODEL: "faux-1",
 					PID_ACP_THINKING: "off",
 					PID_ACP_SESSIONS_DIR: sessions,

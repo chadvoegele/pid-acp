@@ -57,7 +57,7 @@ for (const [level, effort] of [
 				live: true,
 				cwd,
 				env: {
-					PID_ACP_PROVIDER_CONFIG: resolve("tests/helpers/llama-qwen.ts"),
+					PID_ACP_PROVIDERS: resolve("tests/helpers/llama-qwen.ts"),
 					PID_ACP_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
 					PID_ACP_MODEL: "scripted-qwen",
 					PID_ACP_API_KEY: "fake-key",

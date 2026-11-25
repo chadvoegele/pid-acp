@@ -18,7 +18,7 @@ assert.ok(
 	"Set ACPX_CLI to the installed acpx 0.20.0 executable path.",
 );
 for (const key of [
-	"PID_ACP_PROVIDER_CONFIG",
+	"PID_ACP_PROVIDERS",
 	"PID_ACP_BASE_URL",
 	"PID_ACP_MODEL",
 	"PID_ACP_API_KEY",
