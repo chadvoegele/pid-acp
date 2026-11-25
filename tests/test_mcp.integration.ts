@@ -61,7 +61,7 @@ async function setup(t: TestContext, servers: McpServer[]) {
 	const cwd = await mkdtemp(join(tmpdir(), "pid-mcp-"));
 	const env = new NodeExecutionEnv({ cwd });
 	const sandbox = new CodemodeSandbox({ memoryLimitBytes: 64 * 1024 * 1024 });
-	const adapter = new McpAdapter({ servers, issues: [] });
+	const adapter = new McpAdapter({ servers });
 	let harness: Harness | undefined;
 	const registry = createRegistry();
 	registry.install(
@@ -146,7 +146,7 @@ async function setup(t: TestContext, servers: McpServer[]) {
 
 test("async coding registry discovers temporary clients and composes codemode once", async (t) => {
 	const fixture = await httpFixture(t);
-	const adapter = new McpAdapter({ servers: [server(fixture)], issues: [] });
+	const adapter = new McpAdapter({ servers: [server(fixture)] });
 	const sandbox = new CodemodeSandbox({ memoryLimitBytes: 64 * 1024 * 1024 });
 	t.after(async () => {
 		await adapter.close();

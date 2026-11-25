@@ -19,6 +19,7 @@ import {
 	McpConfigurationError,
 	getMcpToolExposure,
 	resolveMcpStdioOptions,
+	type BlockedMcpServer,
 	type McpConfiguration,
 	type McpServer,
 } from "./mcp-config.js";
@@ -83,11 +84,13 @@ type ConnectionState = {
 	oauthFailure?: McpOAuthFailure;
 };
 
-type ServerBinding = {
+type ConnectableServer = {
 	server: McpServer;
 	authProvider?: McpAuthProvider;
 	connections: Map<ConversationId | symbol, ConnectionState>;
 };
+
+type ServerBinding = ConnectableServer | BlockedMcpServer;
 
 export type McpRegistration = {
 	readonly tools: readonly ToolRegistration[];
@@ -100,14 +103,13 @@ export type McpRegistration = {
 
 export class McpAdapter {
 	private readonly servers: ServerBinding[];
-	private readonly issues: McpConfiguration["issues"];
 	private stopped = false;
 	private closing?: Promise<void>;
 
-	constructor({ servers, issues, oauthFile }: McpConfiguration) {
-		this.issues = issues;
+	constructor({ servers, oauthFile }: McpConfiguration) {
 		this.servers = servers.map((server) => {
-			const binding: ServerBinding = { server, connections: new Map() };
+			if (server.kind === "blocked") return server;
+			const binding: ConnectableServer = { server, connections: new Map() };
 			if (server.kind === "http" && server.config.oauth) {
 				if (!oauthFile)
 					throw new McpConfigurationError(
@@ -126,14 +128,16 @@ export class McpAdapter {
 	}
 
 	get enabled() {
-		return this.servers.length > 0 || this.issues.length > 0;
+		return this.servers.length > 0;
 	}
 
 	async discover(cwd: string): Promise<McpRegistration> {
 		const tools: ToolRegistration[] = [];
+		const namespaces: McpRegistration["namespaces"][number][] = [];
 		const taken = new Map<string, string>();
 		const discovery = Symbol();
 		for (const binding of this.servers) {
+			if ("issue" in binding) continue;
 			const { server, authProvider, connections } = binding;
 			const state: ConnectionState = {};
 			connections.set(discovery, state);
@@ -146,6 +150,11 @@ export class McpAdapter {
 					.filter((tool) => getMcpToolExposure(server, tool.name) !== "hidden")
 					.map(describeMcpTool);
 				tools.push(...this.createTools(binding, descriptors, taken));
+				namespaces.push({
+					name: mcpNamespace(server.name),
+					prefix: `${mcpNamespace(server.name)}__`,
+					description: server.config.description ?? `MCP server ${server.name}`,
+				});
 			} catch (error) {
 				const failure = authProvider && oauthFailure(error);
 				throw new McpConfigurationError(
@@ -159,20 +168,14 @@ export class McpAdapter {
 				}
 			}
 		}
-		return {
-			tools,
-			namespaces: this.servers.map(({ server }) => ({
-				name: mcpNamespace(server.name),
-				prefix: `${mcpNamespace(server.name)}__`,
-				description: server.config.description ?? `MCP server ${server.name}`,
-			})),
-		};
+		return { tools, namespaces };
 	}
 
 	async prepare(id: ConversationId, cwd: string) {
 		if (this.stopped) throw new Error("MCP is closing.");
 		await Promise.all(
 			this.servers.map(async (binding) => {
+				if ("issue" in binding) return;
 				const { authProvider, connections } = binding;
 				if (connections.has(id)) return;
 				const state: ConnectionState = {};
@@ -188,7 +191,7 @@ export class McpAdapter {
 	}
 
 	private async connect(
-		{ server, authProvider }: ServerBinding,
+		{ server, authProvider }: ConnectableServer,
 		state: ConnectionState,
 		cwd: string,
 	) {
@@ -212,7 +215,7 @@ export class McpAdapter {
 	}
 
 	private createTools(
-		binding: ServerBinding,
+		binding: ConnectableServer,
 		descriptors: readonly McpDescriptor[],
 		taken: Map<string, string>,
 	) {
@@ -242,28 +245,24 @@ export class McpAdapter {
 	}
 
 	getStatus(id: ConversationId) {
-		return [
-			...this.servers.map(({ server, connections }) => {
-				const state = connections.get(id);
-				return {
-					name: mcpNamespace(server.name),
-					description: server.config.description ?? server.name,
-					status: state?.oauthFailure
-						? oauthGuidance(server.name, state.oauthFailure)
-						: (state?.client?.connectionState ??
-							(state ? "unavailable; restart pid-acp" : "not connected")),
-				};
-			}),
-			...this.issues.map((issue) => ({
-				name: issue.server,
-				description: "",
-				status: issue.message,
-			})),
-		];
+		return this.servers.map((binding) => {
+			if ("issue" in binding)
+				return { name: binding.name, description: "", status: binding.issue };
+			const { server, connections } = binding;
+			const state = connections.get(id);
+			return {
+				name: mcpNamespace(server.name),
+				description: server.config.description ?? server.name,
+				status: state?.oauthFailure
+					? oauthGuidance(server.name, state.oauthFailure)
+					: (state?.client?.connectionState ??
+						(state ? "unavailable; restart pid-acp" : "not connected")),
+			};
+		});
 	}
 
 	private async execute(
-		{ server, authProvider, connections }: ServerBinding,
+		{ server, authProvider, connections }: ConnectableServer,
 		original: string,
 		args: unknown,
 		api: ToolExecutionApi,
@@ -315,15 +314,18 @@ export class McpAdapter {
 	}
 
 	private async release() {
+		const servers = this.servers.filter(
+			(binding): binding is ConnectableServer => !("issue" in binding),
+		);
 		const results = await Promise.allSettled(
-			this.servers.flatMap(({ connections }) =>
+			servers.flatMap(({ connections }) =>
 				[...connections.values()].map(({ client }) => client?.close()),
 			),
 		);
 		await Promise.all(
-			this.servers.map(({ authProvider }) => authProvider?.settled()),
+			servers.map(({ authProvider }) => authProvider?.settled()),
 		);
-		for (const { connections } of this.servers) connections.clear();
+		for (const { connections } of servers) connections.clear();
 		if (results.some((result) => result.status === "rejected"))
 			throw new Error("Could not close all MCP connections.");
 	}

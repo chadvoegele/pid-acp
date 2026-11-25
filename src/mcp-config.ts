@@ -24,9 +24,10 @@ export type McpServer = ValidatedServer & {
 		toolExposure?: Record<string, McpExposure>;
 	};
 };
+export type BlockedMcpServer = { kind: "blocked"; name: string; issue: string };
+
 export type McpConfiguration = {
-	servers: McpServer[];
-	issues: { server: string; message: string }[];
+	servers: (McpServer | BlockedMcpServer)[];
 	oauthFile?: string;
 };
 
@@ -217,8 +218,7 @@ function normalizeConfig(
 	config: McpConfig,
 	env: NodeJS.ProcessEnv,
 ): McpConfiguration {
-	const servers: McpServer[] = [];
-	const issues: { server: string; message: string }[] = [];
+	const servers: McpConfiguration["servers"] = [];
 	for (const [name, raw] of Object.entries(config.mcpServers).sort(([a], [b]) =>
 		a.localeCompare(b),
 	)) {
@@ -246,10 +246,10 @@ function normalizeConfig(
 			} as McpServer);
 		} catch (error) {
 			if (!(error instanceof MissingVariable)) throw error;
-			issues.push({ server: name, message: error.message });
+			servers.push({ kind: "blocked", name, issue: error.message });
 		}
 	}
-	return { servers, issues };
+	return { servers };
 }
 
 export async function loadMcpConfig(
