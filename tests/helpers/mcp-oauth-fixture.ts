@@ -70,11 +70,8 @@ export async function startMcpOAuthFixture(t: TestContext) {
 	let effects = 0;
 	const behavior: {
 		refresh?: "revoked";
-		redirect?: {
-			endpoint: "resource" | "issuer" | "token";
-			target: string;
-			status: number;
-		};
+		resourceMetadataUrl?: string;
+		tokenRedirect?: { target: string; status: number };
 		pause?: Promise<void>;
 		pauseToolChallenge?: Promise<void>;
 		failCall?: boolean;
@@ -126,10 +123,10 @@ export async function startMcpOAuthFixture(t: TestContext) {
 		}
 		refreshes++;
 		await behavior.pause;
-		if (behavior.redirect?.endpoint === "token")
+		if (behavior.tokenRedirect)
 			return response
-				.writeHead(behavior.redirect.status, {
-					location: behavior.redirect.target,
+				.writeHead(behavior.tokenRedirect.status, {
+					location: behavior.tokenRedirect.target,
 				})
 				.end();
 		if (
@@ -168,7 +165,7 @@ export async function startMcpOAuthFixture(t: TestContext) {
 			if (message.method === "tools/call") await behavior.pauseToolChallenge;
 			return response
 				.writeHead(401, {
-					"www-authenticate": `Bearer error="invalid_token", error_description="PRIVATE_OAUTH_CHALLENGE", resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp"`,
+					"www-authenticate": `Bearer error="invalid_token", error_description="PRIVATE_OAUTH_CHALLENGE", resource_metadata="${behavior.resourceMetadataUrl ?? resourceMetadataUrl}"`,
 				})
 				.end("PRIVATE_OAUTH_CHALLENGE_BODY");
 		}
@@ -194,16 +191,6 @@ export async function startMcpOAuthFixture(t: TestContext) {
 	const origin = await listenOAuthFixture(t, (request, response) => {
 		const endpoint = new URL(request.url ?? "/", origin);
 		const { pathname } = endpoint;
-		const redirect = behavior.redirect;
-		if (
-			(redirect?.endpoint === "resource" &&
-				pathname === "/.well-known/oauth-protected-resource/mcp") ||
-			(redirect?.endpoint === "issuer" &&
-				pathname === "/.well-known/oauth-authorization-server")
-		)
-			return response
-				.writeHead(redirect.status, { location: redirect.target })
-				.end();
 		if (pathname === "/.well-known/oauth-protected-resource/mcp")
 			return sendJson(response, {
 				resource: url,
@@ -211,22 +198,29 @@ export async function startMcpOAuthFixture(t: TestContext) {
 				scopes_supported: ["offline_access"],
 			});
 		if (pathname === "/.well-known/oauth-authorization-server")
-			return sendJson(response, {
-				issuer: origin,
-				authorization_endpoint: `${origin}/authorize`,
-				token_endpoint: `${origin}/token`,
-				response_types_supported: ["code"],
-				token_endpoint_auth_methods_supported: ["none"],
-				code_challenge_methods_supported: ["S256"],
-			});
+			return sendJson(response, authorizationServerMetadata);
 		if (pathname === "/authorize") return authorize(endpoint, response);
 		if (pathname === "/token") return exchangeToken(request, response);
 		if (pathname === "/mcp") return handleMcp(request, response);
 		return response.writeHead(404).end();
 	});
 	const url = `${origin}/mcp`;
+	const resourceMetadataUrl = `${origin}/.well-known/oauth-protected-resource/mcp`;
+	const authorizationServerMetadata = {
+		issuer: origin,
+		authorization_endpoint: `${origin}/authorize`,
+		token_endpoint: `${origin}/token`,
+		response_types_supported: ["code"],
+		token_endpoint_auth_methods_supported: ["none"],
+		code_challenge_methods_supported: ["S256"],
+	};
 	return {
 		url,
+		discovery: {
+			authorizationServerUrl: origin,
+			authorizationServerMetadata,
+			resourceMetadataUrl,
+		},
 		tokens,
 		issue,
 		behavior,

@@ -18,6 +18,7 @@ class RefreshSaveError extends OAuthError {
 		super("pid_acp_store_error", "Could not save Pi OAuth state");
 	}
 }
+class MissingRefreshEndpointError extends Error {}
 class UnsupportedClientError extends Error {}
 class RefreshFailedError extends Error {}
 
@@ -29,6 +30,7 @@ export function oauthFailure(error: unknown): McpOAuthFailure | undefined {
 	if (error instanceof RefreshSaveError) return "store";
 	if (error instanceof RefreshFailedError) return "refresh";
 	if (
+		error instanceof MissingRefreshEndpointError ||
 		error instanceof McpOAuthAuthorizationRequiredError ||
 		error instanceof McpAuthRequiredError
 	)
@@ -62,6 +64,22 @@ export function piMcpAuthProvider(
 		store: {
 			...store,
 			load: loadPublicState,
+			withRefreshLock(refresh) {
+				return store.withRefreshLock(async () => {
+					const discovery = (await loadPublicState())?.discovery;
+					const metadata = discovery?.authorizationServerMetadata;
+					for (const value of [
+						discovery?.authorizationServerUrl,
+						metadata?.issuer,
+						metadata?.token_endpoint,
+					]) {
+						const url = typeof value === "string" ? URL.parse(value) : null;
+						if (!url || !isSecureMcpOAuthUrl(url))
+							throw new MissingRefreshEndpointError();
+					}
+					return refresh();
+				});
+			},
 			async save(state) {
 				try {
 					await store.save(state);

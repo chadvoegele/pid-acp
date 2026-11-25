@@ -52,6 +52,7 @@ async function setup(t: TestContext) {
 	const read = async () => JSON.parse(await readFile(authFile, "utf8"));
 	const state = {
 		serverUrl: http.url,
+		discovery: http.discovery,
 		tokens: http.issue(),
 		tokensExpireAt: Date.now() - 1,
 	};
@@ -116,30 +117,58 @@ test("discovery sends the stored bearer for an expired grant without refreshing 
 	assert.deepEqual((await f.read())[otherKey], other);
 });
 
-for (const endpoint of ["resource", "issuer", "token"] as const) {
-	for (const status of [307, 308]) {
-		test(`OAuth ${endpoint} ${status} redirect never reaches a second origin`, async (t) => {
-			const f = await setup(t);
-			await f.seed();
-			let forwarded = 0;
-			const target = await listenOAuthFixture(t, (_req, res) => {
-				forwarded++;
-				res.end();
-			});
-			f.http.behavior.redirect = { endpoint, target, status };
-			const adapter = await f.createAdapter();
-			await adapter.discover(f.cwd);
-			assert.equal(f.http.counts.refreshes, 0);
-			f.http.expire();
-			await assert.rejects(
-				adapter.discover(f.cwd),
-				safeFailure(/OAuth refresh failed/),
-			);
-			assert.equal(f.http.counts.refreshes, endpoint === "token" ? 1 : 0);
-			assert.equal(forwarded, 0);
-			assert.deepEqual((await f.read())[f.key].tokens, f.state.tokens);
-		});
+test("refresh uses only the endpoint saved during login, not challenge discovery", async (t) => {
+	const f = await setup(t);
+	let discoveryRequests = 0;
+	const target = await listenOAuthFixture(t, (_req, res) => {
+		discoveryRequests++;
+		res.writeHead(404).end();
+	});
+	f.http.behavior.resourceMetadataUrl = `${target}/metadata`;
+	const adapter = await f.createAdapter();
+	for (const discovery of [
+		undefined,
+		{ authorizationServerUrl: f.http.discovery.authorizationServerUrl },
+	]) {
+		await f.seed({ discovery, tokens: f.http.issue() });
+		assert.equal((await adapter.discover(f.cwd)).tools.length, 1);
+		f.http.expire();
+		await assert.rejects(
+			adapter.discover(f.cwd),
+			safeFailure(/pi mcp login project-docs/),
+		);
+		assert.equal(f.http.counts.refreshes, 0);
+		assert.equal(discoveryRequests, 0);
 	}
+	await f.seed({ tokens: f.http.issue() });
+	f.http.expire();
+	assert.equal((await adapter.discover(f.cwd)).tools.length, 1);
+	assert.equal(f.http.counts.refreshes, 1);
+	assert.equal(discoveryRequests, 0);
+});
+
+for (const status of [307, 308]) {
+	test(`OAuth token ${status} redirect never reaches a second origin`, async (t) => {
+		const f = await setup(t);
+		await f.seed();
+		let forwarded = 0;
+		const target = await listenOAuthFixture(t, (_req, res) => {
+			forwarded++;
+			res.end();
+		});
+		f.http.behavior.tokenRedirect = { target, status };
+		const adapter = await f.createAdapter();
+		await adapter.discover(f.cwd);
+		assert.equal(f.http.counts.refreshes, 0);
+		f.http.expire();
+		await assert.rejects(
+			adapter.discover(f.cwd),
+			safeFailure(/OAuth refresh failed/),
+		);
+		assert.equal(f.http.counts.refreshes, 1);
+		assert.equal(forwarded, 0);
+		assert.deepEqual((await f.read())[f.key].tokens, f.state.tokens);
+	});
 }
 
 test("missing, legacy and nonrenewable grants fail before dispatch with login guidance; malformed or incompatible state fails closed", async (t) => {
