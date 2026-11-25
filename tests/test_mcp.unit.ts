@@ -6,7 +6,7 @@ import { McpAdapter } from "../dist/mcp.js";
 const id = 1 as ConversationId;
 
 test("disabled MCP returns empty discovery and status without setup", async () => {
-	const adapter = new McpAdapter({ servers: [], issues: [] });
+	const adapter = new McpAdapter({ servers: [] });
 	assert.equal(adapter.enabled, false);
 	assert.deepEqual(await adapter.discover("/unused"), {
 		tools: [],
@@ -18,8 +18,13 @@ test("disabled MCP returns empty discovery and status without setup", async () =
 
 test("configuration issues enable status guidance without creating clients", async () => {
 	const adapter = new McpAdapter({
-		servers: [],
-		issues: [{ server: "fixture", message: "missing environment variable" }],
+		servers: [
+			{
+				kind: "blocked",
+				name: "fixture",
+				issue: "missing environment variable",
+			},
+		],
 	});
 	assert.equal(adapter.enabled, true);
 	assert.deepEqual(adapter.getStatus(id), [
@@ -33,6 +38,11 @@ test("configuration issues enable status guidance without creating clients", asy
 		tools: [],
 		namespaces: [],
 	});
+	await adapter.prepare(id, "/unused");
+	assert.equal(
+		adapter.getStatus(id)[0]?.status,
+		"missing environment variable",
+	);
 	adapter.stopAdmission();
 	await assert.rejects(adapter.prepare(id, "/unused"), /closing/);
 	const closing = adapter.close();

@@ -168,7 +168,7 @@ test("production startup preserves only sanitized MCP configuration categories a
 					},
 				},
 			}),
-			"OAuth/auth providers and configured roots are unsupported",
+			"OAuth requires a streamable HTTP URL",
 		],
 	] as const) {
 		await writeFile(path, source, { mode: 0o600 });

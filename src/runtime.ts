@@ -60,7 +60,7 @@ export class Runtime {
 		thinkingLevel: ModelThinkingLevel = "off",
 		resourcePaths: ResourcePaths = {},
 		sessionsDir?: string,
-		mcpConfiguration: McpConfiguration = { servers: [], issues: [] },
+		mcpConfiguration: McpConfiguration = { servers: [] },
 		extensionPaths: readonly string[] = [],
 	) {
 		const runtime = new Runtime(

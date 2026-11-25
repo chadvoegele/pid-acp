@@ -67,12 +67,10 @@ test("disabled and missing default do no configuration work; explicit missing fa
 	const f = await fixture(t);
 	assert.deepEqual(await loadMcpConfig(undefined, {}), {
 		servers: [],
-		issues: [],
 	});
 	const path = join(f.root, "missing-SECRET.json");
 	assert.deepEqual(await loadMcpConfig({ path, required: false }, {}), {
 		servers: [],
-		issues: [],
 	});
 	await assert.rejects(
 		loadMcpConfig({ path, required: true }, {}),
@@ -100,7 +98,7 @@ test("ordinary JSON parsing validates the application container without parser e
 		await assert.rejects(f.load(value), /mcpServers object/);
 	assert.deepEqual(
 		await f.source('{"mcpServers":{"old":{"command":"x"}},"mcpServers":{}}'),
-		{ servers: [], issues: [] },
+		{ servers: [] },
 	);
 });
 
@@ -150,7 +148,9 @@ test("base validation follows the public upstream validator, including transport
 	const infinite = await f.source(
 		'{"mcpServers":{"fixture":{"command":"x","timeout":1e999}}}',
 	);
-	assert.equal(infinite.servers[0]?.config.timeout, Infinity);
+	const [infiniteServer] = infinite.servers;
+	assert.ok(infiniteServer?.kind === "stdio");
+	assert.equal(infiniteServer.config.timeout, Infinity);
 });
 
 test("unsupported active features fail actionably; disabled entries and inert extensions stay inert", async (t) => {
@@ -197,7 +197,87 @@ test("unsupported active features fail actionably; disabled entries and inert ex
 			},
 			autoEnableCodemode: true,
 		}),
-		{ servers: [], issues: [] },
+		{ servers: [] },
+	);
+});
+
+test("HTTP OAuth opts into a saved grant with or without a literal client ID", async (t) => {
+	const f = await fixture(t);
+	const oauth = {
+		clientId: "public-fixture",
+		scope: "offline_access",
+		callbackUrl: "http://127.0.0.1:8765/callback",
+		callbackPort: 8765,
+	};
+	const entry = { url: "https://example.test/mcp", oauth };
+	const config = { mcpServers: { "fixture-docs": entry } };
+	for (const settings of [oauth, {}, { scope: "offline_access" }]) {
+		const [server] = (
+			await f.load({
+				mcpServers: { fixture: { ...entry, oauth: settings } },
+			})
+		).servers;
+		assert.ok(server?.kind === "http");
+		assert.deepEqual(server.config.oauth, settings);
+	}
+	for (const invalid of [
+		{ ...entry, url: "http://example.test/mcp" },
+		{ ...entry, url: "https://user:SECRET@example.test/mcp" },
+		{ ...entry, url: "https://example.test/mcp#SECRET" },
+		{ ...entry, url: "https://example.test/mcp#" },
+		{ ...entry, headers: { aUtHoRiZaTiOn: "SECRET" } },
+		{ ...entry, oauth: { clientRegistration: "dcr" } },
+		{ command: "fixture", oauth: {} },
+		...[
+			{ clientId: "  " },
+			{ clientId: "!SECRET" },
+			{ clientId: "${SECRET}" },
+			{ scope: "${SECRET}" },
+			{ clientSecret: "SECRET" },
+			{ clientName: "SECRET" },
+			{ clientRegistration: "dcr" },
+			{ clientRegistration: "cimd" },
+			{ authServerMetadataUrl: "https://secret.example/" },
+			{ extra: "SECRET" },
+			{ callbackUrl: "http://example.test/SECRET" },
+		].map((options) => ({ ...entry, oauth: { ...oauth, ...options } })),
+	]) {
+		await assert.rejects(
+			f.load({ mcpServers: { fixture: invalid } }),
+			(error: Error) => {
+				assert.match(error.message, /MCP configuration:/);
+				assert.doesNotMatch(error.message, /SECRET|secret\.example/);
+				return true;
+			},
+		);
+	}
+	await assert.rejects(
+		f.load({
+			mcpServers: {
+				...config.mcpServers,
+				fixture_docs: { command: "fixture", env: { TOKEN: "${MISSING}" } },
+			},
+		}),
+		/share a namespace/,
+	);
+	assert.equal(
+		(
+			await f.load({
+				mcpServers: {
+					...config.mcpServers,
+					fixture_docs: { ...entry, enabled: false },
+				},
+			})
+		).servers.length,
+		1,
+	);
+	assert.equal(
+		(
+			await f.load({
+				mcpServers: { fixture: { ...entry, url: "http://127.0.0.1:9000/mcp" } },
+			})
+		).servers.length,
+		1,
 	);
 });
 
@@ -330,27 +410,22 @@ test("missing env disables only its server; errors expose field categories, not 
 		},
 	});
 	assert.deepEqual(
-		config.servers.map((server) => server.name),
-		["healthy"],
+		config.servers.map(({ name, kind }) => ({ name, kind })),
+		[
+			{ name: "env_missing", kind: "blocked" },
+			{ name: "healthy", kind: "stdio" },
+			{ name: "http_missing", kind: "blocked" },
+		],
 	);
-	assert.deepEqual(
-		config.issues.map((issue) => issue.server),
-		["env_missing", "http_missing"],
-	);
-	assert.ok(config.issues[0] && config.issues[1]);
-	assert.match(config.issues[0].message, /in env/);
-	assert.match(config.issues[1].message, /in headers/);
-	assert.ok(!JSON.stringify(config.issues).includes("SECRET"));
-	assert.equal(
-		(
-			await f.load({
-				mcpServers: {
-					fixture: { command: "x", env: { TOKEN: "${toString}" } },
-				},
-			})
-		).issues.length,
-		1,
-	);
+	const blocked = config.servers.filter((server) => server.kind === "blocked");
+	assert.ok(blocked[0] && blocked[1]);
+	assert.match(blocked[0].issue, /in env/);
+	assert.match(blocked[1].issue, /in headers/);
+	assert.ok(!JSON.stringify(blocked).includes("SECRET"));
+	const inherited = await f.load({
+		mcpServers: { fixture: { command: "x", env: { TOKEN: "${toString}" } } },
+	});
+	assert.equal(inherited.servers[0]?.kind, "blocked");
 	for (const entry of [
 		{ command: "x", env: { TOKEN: "!cmd SECRET" } },
 		{
@@ -419,7 +494,7 @@ test("exposure aliases normalize; exact names beat first matching wildcard with 
 			},
 		})
 	).servers[0];
-	assert.ok(server);
+	assert.ok(server?.kind === "stdio");
 	assert.equal(getMcpToolExposure(server, "read_exact"), "codemode");
 	assert.equal(getMcpToolExposure(server, "read_other"), "hidden");
 	assert.equal(getMcpToolExposure(server, "other"), "codemode");
@@ -430,7 +505,7 @@ test("exposure aliases normalize; exact names beat first matching wildcard with 
 			},
 		})
 	).servers[0];
-	assert.ok(literal);
+	assert.ok(literal?.kind === "stdio");
 	assert.equal(getMcpToolExposure(literal, "tool.[value"), "hidden");
 	assert.equal(getMcpToolExposure(literal, "toolXvalue"), "codemode");
 	assert.equal(getMcpToolExposure(literal, "toString"), "codemode");
@@ -450,7 +525,6 @@ test("selected user config follows ordinary file and symlink permissions", async
 	await symlink(f.path, alias);
 	assert.deepEqual(await loadMcpConfig({ path: alias, required: true }, {}), {
 		servers: [],
-		issues: [],
 	});
 	const directoryAlias = join(f.root, "directory-alias");
 	await symlink(f.root, directoryAlias);
@@ -459,7 +533,7 @@ test("selected user config follows ordinary file and symlink permissions", async
 			{ path: join(directoryAlias, "mcp.json"), required: true },
 			{},
 		),
-		{ servers: [], issues: [] },
+		{ servers: [] },
 	);
 	await assert.rejects(
 		loadMcpConfig({ path: f.root, required: true }, {}),

@@ -5,7 +5,8 @@ import { pathToFileURL } from "node:url";
 import { createModels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { Models, Provider } from "@earendil-works/pi-ai/models";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
-import type { McpConfigPath } from "./mcp-config.js";
+import { McpConfigurationError, type McpConfigPath } from "./mcp-config.js";
+import { isPiMcpAuthFile } from "./mcp-oauth-store.js";
 import type { ResourcePaths } from "./resources.js";
 import { UserExtensionError } from "./user-extensions.js";
 
@@ -18,6 +19,7 @@ export interface Config {
 	readonly sessionsDir?: string;
 	readonly socketPath?: string;
 	readonly mcpConfig: McpConfigPath | undefined;
+	readonly mcpAuthFile: string;
 	readonly extensionPaths: readonly string[];
 }
 
@@ -66,6 +68,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
 			: { sessionsDir: env.PID_ACP_SESSIONS_DIR }),
 		...(socketPath === undefined ? {} : { socketPath }),
 		mcpConfig: resolveMcpConfigPath(env),
+		mcpAuthFile: resolveMcpAuthFile(env),
 		extensionPaths: parseExtensionPaths(env.PID_ACP_EXTENSIONS),
 		resources: { instructionsPath, skillsDir },
 		providerPaths,
@@ -136,6 +139,17 @@ function resolveMcpConfigPath(
 		path: value ?? join(homedir(), ".pi", "agent", "mcp.json"),
 		required: value !== undefined,
 	};
+}
+
+function resolveMcpAuthFile(env: NodeJS.ProcessEnv): string {
+	const path =
+		env.PID_ACP_MCP_AUTH_FILE ??
+		join(homedir(), ".pi", "agent", "mcp-auth.json");
+	if (!isPiMcpAuthFile(path))
+		throw new McpConfigurationError(
+			"PID_ACP_MCP_AUTH_FILE must be the absolute canonical path to Pi's live mcp-auth.json.",
+		);
+	return path;
 }
 
 function resolveResourcePath(

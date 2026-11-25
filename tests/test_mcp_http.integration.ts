@@ -40,7 +40,6 @@ async function prepare(t: TestContext, urls: string[]) {
 				exposure: "codemode",
 			},
 		})),
-		issues: [],
 	});
 	t.after(async () => {
 		await adapter.close();

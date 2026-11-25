@@ -1,7 +1,7 @@
 +++
 status = "draft"
 created = 2026-11-13
-last_update = 2026-11-17
+last_update = 2026-11-25
 +++
 
 # MCP tools through standalone pi-mcp
@@ -32,12 +32,13 @@ subprocess supervisor or recovery framework.
 - Discover and call stdio and Streamable HTTP tools through standalone pi-mcp.
 - Expose collision-safe, codemode-only tools and structured results.
 - Isolate clients by native conversation identity, including equal workspaces.
+- Reuse and refresh a Pi CLI service grant for opted-in HTTP servers.
 - Keep setup, execution and cleanup explicit at their owning components.
 
 ## Non-goals
 
-- Project/ACP server configuration, OAuth, auth-provider integration, `!cmd`
-  helpers, hot reload, automatic reconnect, tool-list updates, resource APIs,
+- Project/ACP server configuration, in-process sign-in, custom auth providers,
+  `!cmd` helpers, hot reload, automatic reconnect, tool-list updates, resource APIs,
   prompts, sampling, elicitation and Apps.
   Embedded resource blocks in tool results remain supported.
 - Direct/deferred model exposure, owner-specific schema variants, schema unions,
@@ -89,7 +90,8 @@ filters unchanged.
 Read `~/.pi/agent/mcp.json` at launch. A nonempty absolute `PID_ACP_MCP_CONFIG`
 replaces that path; an empty value disables MCP. A missing default means no servers;
 an explicit missing file or malformed JSON fails startup. Ignore
-`PI_CODING_AGENT_DIR`, project `.pi/mcp.json`, Pi settings and OAuth stores.
+`PI_CODING_AGENT_DIR`, project `.pi/mcp.json` and Pi settings. Use the Pi OAuth
+store only for explicitly opted-in servers.
 ACP requests must still supply `mcpServers: []`.
 
 Trust the selected file: use ordinary file reading and JSON parsing, including
@@ -113,16 +115,47 @@ canonical conversation workspace.
 
 Exposure defaults to `codemode`; accept `codemode-deferred` as an alias and `hidden`.
 Exact toolExposure names beat the first matching `*` pattern. Hidden tools never
-register. Reject direct/deferred model exposure, OAuth/auth-provider fields,
+register. Reject direct/deferred model exposure, custom auth-provider fields,
 configured roots, `!cmd` helpers and `autoEnableCodemode: false` with sanitized
 correction guidance, without echoing values or upstream server-name interpolation.
 
 Expand `${NAME}` once in env/header values from the launch environment. Missing
 variables disable only that server with a field-category error. Do not execute
-helpers, expand URLs, recurse or persist credentials. Use upstream HTTP/HTTPS URL
-semantics without extra host, credentials or fragment restrictions; redirects
-remain rejected. Static headers support bearer/API-key authentication.
-Authentication failure never opens a browser.
+helpers, expand URLs, recurse or persist expanded values. Non-OAuth servers use
+upstream HTTP/HTTPS URL semantics. Static headers support bearer/API-key
+authentication. All HTTP transports reject redirects.
+
+### Pi-bootstrapped OAuth
+
+An HTTP `oauth` entry opts in to a Pi grant. It may include a literal pre-registered
+public `clientId` and Pi's `scope`, `callbackPort` and `callbackUrl` sign-in settings.
+Use `"oauth": {}` to reuse a Pi dynamic registration without copying the client ID.
+Reject configured client secrets, registration hints, client metadata documents,
+issuer overrides, custom auth providers, Authorization header conflicts, enabled
+namespace aliases involving OAuth, and non-loopback cleartext OAuth endpoints.
+If Pi needs a `clientRegistration: "dcr"` hint, set it only in Pi's configuration.
+
+Use the actual private Pi named store at `PID_ACP_MCP_AUTH_FILE` or
+`~/.pi/agent/mcp-auth.json`, keyed by namespace and normalized URL. Never migrate
+URL-only records. Bootstrap in Pi with the same server name and URL. Require a
+renewable bearer grant. With a configured client ID, bootstrap with that same
+ID and reject grants containing saved client information; Pi does not normally
+record a configured ID in the grant. Without a configured client ID, require
+usable saved client information. Let pi-mcp select and apply authentication
+using that registration, including any saved secret. Preserve the registration
+and opaque store data across rotation, except when invalidated by pi-mcp.
+
+Stop or drain all refreshers before login, logout, or reauthorization; the
+browser flow is not covered by the refresh lock.
+
+Share one provider per server across process discovery and conversation clients.
+Supply tokens from the store without expiry refresh; delegate challenge recovery
+to pi-mcp using the saved issuer metadata and token endpoint. Never follow
+redirects or rediscover endpoints from the challenge. Serialize refreshes using
+Pi-compatible locks. pid-acp never registers or starts a browser flow. Give safe
+login/restart guidance for missing or unusable authorization, distinct from
+store/configuration, lock or transport failures. Never include registered client
+secrets in errors.
 
 ### Fixed setup and discovery
 
@@ -146,8 +179,10 @@ Ignore `notifications/tools/list_changed`. Tools call only the already prepared
 owning client; they never connect, rediscover or mutate registry composition.
 Unexpected connection loss, tool removal or incompatible server behavior fails
 through the ordinary upstream/native call boundary. Sanitize error details and
-never retry or automatically replay a failed mutation. Reconnect, hot reload and
-dynamic catalog consistency are out of scope; restart to pick up changes.
+never retry ambiguous failures. pi-mcp may resend an OAuth-challenged request once
+after recovery; only opt in servers that reject before applying effects.
+Reconnect, hot reload and dynamic catalog consistency are out of scope; restart
+to pick up changes.
 
 Restart discards these definitions. Current file/current discovery then apply to
 all sessions, including old ones. Users own compatibility and repair configuration
@@ -213,9 +248,9 @@ restart. Do not inspect LiveDoc or maintain per-submission retry state.
 ### Shutdown and persistence
 
 Accepted Runtime close stops external admission, joins native work, then closes
-all clients, including partial setup/failed discovery, before sandbox disposal.
-Use all-settled cleanup so failures cannot skip owned resources. Apply the same
-cleanup to failed Runtime startup. Upstream stdio escalation fits the existing
+all clients, including partial setup/failed discovery, then joins in-flight OAuth
+refreshes before sandbox disposal. Use all-settled cleanup so failures cannot
+skip owned resources. Apply the same cleanup to failed Runtime startup. Upstream stdio escalation fits the existing
 four-second process deadline; add no subprocess supervisor. Hard deadlines report
 failure rather than graceful success.
 
@@ -259,10 +294,14 @@ live model tests opt-in.
 - Cover normal/failed-start cleanup, partial setup, cancellation/next prompt on a
   healthy client, load rollback and child escalation. Assert no leaked fixture
   children or secrets.
-- On final source run npm ci, build, strict source/test typecheck, lint, format,
-  full deterministic suites and focused actual-live production MCP ACP acceptance.
-  Record outcomes, timings, failures and independent review in the implementation
-  MR, not repository documents.
+- Use synthetic grants and loopback MCP/authorization servers to verify Pi CLI
+  bootstrap and reauthorization for a pre-registered client. Verify a no-ID Pi
+  bootstrap registers once, tool execution succeeds, a refresh uses the saved
+  secret, and restart reuses the registration and rotated grant. Cover missing
+  and rejected registrations, cross-process contention, concurrent conversations,
+  redirect rejection, cancellation/shutdown, and diagnostic and output redaction.
+- Run npm ci, build, strict source/test typecheck, lint, format and full
+  deterministic suites. Record outcomes in the PR, not repository documents.
 
 ## References
 
