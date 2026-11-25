@@ -201,6 +201,114 @@ test("unsupported active features fail actionably; disabled entries and inert ex
 	);
 });
 
+test("HTTP OAuth opts into a literal public client and a separate live Pi file", async (t) => {
+	const f = await fixture(t);
+	const oauth = {
+		clientId: "public-fixture",
+		scope: "offline_access",
+		callbackUrl: "http://127.0.0.1:8765/callback",
+		callbackPort: 8765,
+	};
+	const entry = { url: "https://example.test/mcp", oauth };
+	const config = { mcpServers: { "fixture-docs": entry } };
+	const authFile = join(f.root, "mcp-auth.json");
+	const env = { PI_CODING_AGENT_DIR: "/not-used" };
+	assert.equal(
+		(await f.load(config, env)).oauthFile,
+		join(homedir(), ".pi", "agent", "mcp-auth.json"),
+	);
+	const loaded = await f.load(config, {
+		...env,
+		PID_ACP_MCP_AUTH_FILE: authFile,
+	});
+	assert.deepEqual(loaded.servers[0]?.config.oauth, oauth);
+	assert.equal(loaded.oauthFile, authFile);
+	for (const invalid of [
+		"",
+		"mcp-auth.json",
+		`${authFile}/`,
+		join(f.root, "copied.json"),
+	]) {
+		await assert.rejects(
+			f.load(config, { PID_ACP_MCP_AUTH_FILE: invalid }),
+			/PID_ACP_MCP_AUTH_FILE/,
+		);
+		assert.equal(
+			(
+				await f.load(
+					{
+						mcpServers: {
+							plain: {
+								url: entry.url,
+								headers: { Authorization: "Bearer fixture" },
+							},
+						},
+					},
+					{ PID_ACP_MCP_AUTH_FILE: invalid },
+				)
+			).oauthFile,
+			undefined,
+		);
+	}
+	for (const invalid of [
+		{ ...entry, url: "http://example.test/mcp" },
+		{ ...entry, url: "https://user:SECRET@example.test/mcp" },
+		{ ...entry, url: "https://example.test/mcp#SECRET" },
+		{ ...entry, headers: { aUtHoRiZaTiOn: "SECRET" } },
+		{ ...entry, oauth: {} },
+		...[
+			{ clientId: "  " },
+			{ clientId: "!SECRET" },
+			{ clientId: "${SECRET}" },
+			{ scope: "${SECRET}" },
+			{ clientSecret: "SECRET" },
+			{ clientName: "SECRET" },
+			{ clientRegistration: "dcr" },
+			{ clientRegistration: "cimd" },
+			{ authServerMetadataUrl: "https://secret.example/" },
+			{ extra: "SECRET" },
+			{ callbackUrl: "http://example.test/SECRET" },
+		].map((options) => ({ ...entry, oauth: { ...oauth, ...options } })),
+	]) {
+		await assert.rejects(
+			f.load({ mcpServers: { fixture: invalid } }),
+			(error: Error) => {
+				assert.match(error.message, /MCP configuration:/);
+				assert.doesNotMatch(error.message, /SECRET|secret\.example/);
+				return true;
+			},
+		);
+	}
+	await assert.rejects(
+		f.load({
+			mcpServers: {
+				...config.mcpServers,
+				fixture_docs: { command: "fixture" },
+			},
+		}),
+		/share a namespace/,
+	);
+	assert.equal(
+		(
+			await f.load({
+				mcpServers: {
+					...config.mcpServers,
+					fixture_docs: { ...entry, enabled: false },
+				},
+			})
+		).servers.length,
+		1,
+	);
+	assert.equal(
+		(
+			await f.load({
+				mcpServers: { fixture: { ...entry, url: "http://127.0.0.1:9000/mcp" } },
+			})
+		).servers.length,
+		1,
+	);
+});
+
 test("config uses only its selected file and delegates server-name syntax without a length cap", async (t) => {
 	const f = await fixture(t);
 	await mkdir(join(f.root, ".pi"));

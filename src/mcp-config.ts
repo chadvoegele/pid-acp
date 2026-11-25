@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import {
+	mcpNamespace,
 	validateMcpServerConfig,
+	type McpOAuthConfig,
 	type McpServerConfigResult,
 	type StdioTransportOptions,
 } from "@earendil-works/pi-mcp";
@@ -9,16 +12,23 @@ import {
 export type McpConfigPath = { path: string; required: boolean };
 type McpExposure = "codemode" | "hidden";
 type McpConfig = { mcpServers: Record<string, Record<string, unknown>> };
-export type McpServer = Exclude<McpServerConfigResult, { kind: "invalid" }> & {
+type ValidatedServer = Exclude<McpServerConfigResult, { kind: "invalid" }>;
+export type PublicMcpOAuth = Pick<
+	McpOAuthConfig,
+	"scope" | "callbackPort" | "callbackUrl"
+> & { clientId: string };
+export type McpServer = ValidatedServer & {
 	name: string;
 	config: {
 		exposure: McpExposure;
+		oauth?: PublicMcpOAuth;
 		toolExposure?: Record<string, McpExposure>;
 	};
 };
 export type McpConfiguration = {
 	servers: McpServer[];
 	issues: { server: string; message: string }[];
+	oauthFile?: string;
 };
 
 export class McpConfigurationError extends Error {}
@@ -95,13 +105,59 @@ async function readConfig(
 	}
 }
 
-function validateServer(config: Record<string, unknown>) {
+const publicOAuthKeys = new Set([
+	"clientId",
+	"scope",
+	"callbackPort",
+	"callbackUrl",
+]);
+
+export function isSecureMcpOAuthUrl(url: URL) {
+	return (
+		!url.username &&
+		!url.password &&
+		!url.hash &&
+		(url.protocol === "https:" ||
+			(url.protocol === "http:" &&
+				["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))
+	);
+}
+
+function validateOAuth(server: ValidatedServer) {
+	if (server.config.oauth === undefined) return;
 	if (
-		["oauth", "auth", "authProvider", "roots"].some(
-			(key) => config[key] !== undefined,
+		server.kind !== "http" ||
+		!isSecureMcpOAuthUrl(new URL(server.config.url))
+	)
+		rejectConfig(
+			"OAuth requires a streamable HTTP URL over HTTPS or loopback HTTP, without userinfo or a fragment.",
+		);
+	const { oauth, headers } = server.config;
+	if (
+		Object.keys(headers ?? {}).some(
+			(key) => key.trim().toLowerCase() === "authorization",
 		)
 	)
-		rejectConfig("OAuth/auth providers and configured roots are unsupported.");
+		rejectConfig("OAuth cannot be combined with an Authorization header.");
+	if (
+		!oauth.clientId?.trim() ||
+		[oauth.clientId, oauth.scope].some(
+			(value) =>
+				value !== undefined &&
+				(value.trimStart().startsWith("!") || value.includes("${")),
+		) ||
+		Object.keys(oauth).some((key) => !publicOAuthKeys.has(key))
+	)
+		rejectConfig(
+			"OAuth requires a literal pre-registered public clientId; only scope, callbackPort and callbackUrl may also be set.",
+		);
+}
+
+function validateServer(config: Record<string, unknown>) {
+	if (
+		["auth", "authProvider", "roots"].some((key) => config[key] !== undefined)
+	)
+		rejectConfig("Custom auth providers and configured roots are unsupported.");
 	if (config.inheritEnv !== undefined && typeof config.inheritEnv !== "boolean")
 		rejectConfig("inheritEnv must be a boolean when supplied.");
 	validateExposure(config.exposure);
@@ -121,6 +177,7 @@ function validateConfig(config: unknown): asserts config is McpConfig {
 		config.autoEnableCodemode !== true
 	)
 		rejectConfig("autoEnableCodemode must be true when supplied.");
+	const namespaces = new Map<string, boolean>();
 	for (const [name, raw] of Object.entries(config.mcpServers).sort(([a], [b]) =>
 		a.localeCompare(b),
 	)) {
@@ -136,6 +193,15 @@ function validateConfig(config: unknown): asserts config is McpConfig {
 			);
 		}
 		validateServer(checked.config);
+		validateOAuth(checked);
+		const namespace = mcpNamespace(name);
+		const oauth = checked.config.oauth !== undefined;
+		const previous = namespaces.get(namespace);
+		if (previous !== undefined && (previous || oauth))
+			rejectConfig(
+				"Enabled server names cannot share a namespace when either uses OAuth.",
+			);
+		namespaces.set(namespace, oauth);
 		const field = checked.kind === "http" ? "headers" : "env";
 		const values =
 			checked.kind === "http" ? checked.config.headers : checked.config.env;
@@ -184,7 +250,21 @@ function normalizeConfig(
 			issues.push({ server: name, message: error.message });
 		}
 	}
-	return { servers, issues };
+	if (!servers.some((server) => server.kind === "http" && server.config.oauth))
+		return { servers, issues };
+	const oauthFile =
+		env.PID_ACP_MCP_AUTH_FILE ??
+		join(homedir(), ".pi", "agent", "mcp-auth.json");
+	if (
+		!isAbsolute(oauthFile) ||
+		resolve(oauthFile) !== oauthFile ||
+		basename(oauthFile) !== "mcp-auth.json" ||
+		oauthFile.includes("\0")
+	)
+		rejectConfig(
+			"PID_ACP_MCP_AUTH_FILE must be the absolute canonical path to Pi's live mcp-auth.json.",
+		);
+	return { servers, issues, oauthFile };
 }
 
 export async function loadMcpConfig(

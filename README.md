@@ -45,6 +45,7 @@ PID_ACP_PROVIDERS=/provider.mts PID_ACP_MODEL=example-model node dist/main.js
 | `PID_ACP_INSTRUCTIONS` | Global instructions file; empty disables it. |
 | `PID_ACP_SKILLS_DIR` | Global skills directory; empty disables it. |
 | `PID_ACP_MCP_CONFIG` | MCP config file; empty disables MCP. |
+| `PID_ACP_MCP_AUTH_FILE` | Absolute path to Pi’s live `mcp-auth.json`; defaults to `~/.pi/agent/mcp-auth.json`. Only used for opted-in OAuth servers. |
 | `PID_ACP_EXTENSIONS` | JSON array of absolute Durable extension paths. |
 | `PID_ACP_SESSIONS_DIR` | Absolute directory for persistent sessions. |
 | `PID_ACP_SOCKET_PATH` | Absolute Unix socket path; unset uses stdio. |
@@ -68,6 +69,10 @@ export default createProvider({
   // Add authentication if required.
 });
 ```
+
+### MCP OAuth
+
+For a Streamable HTTP server, a service operator can sign in with Pi CLI 1.5.2 and let pid-acp reuse and refresh that grant. See [MCP OAuth setup](docs/mcp-oauth.md) for a headless example, compatibility limits, and the required stop-before-reauthorizing procedure.
 
 ### User extension sketch
 
