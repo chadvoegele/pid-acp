@@ -58,9 +58,10 @@ async function setup(t: TestContext) {
 	const seed = (extras = {}) =>
 		write({ [key]: { ...state, ...extras }, [otherKey]: other });
 	const getAdapter = async () => {
-		const adapter = new McpAdapter(
-			await loadMcpConfig({ path, required: true }, env),
-		);
+		const adapter = new McpAdapter({
+			...(await loadMcpConfig({ path, required: true }, env)),
+			oauthFile: authFile,
+		});
 		t.after(() => adapter.close());
 		return adapter;
 	};
@@ -357,8 +358,8 @@ test("ACP cancellation and orderly EOF join an uncancellable rotation without re
 	assert.deepEqual((await f.read())[otherKey], other);
 });
 
-test("Pi 1.5.2 CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-process rotation", {
-	skip: !piBinary && "set PID_ACP_TEST_PI to an isolated Pi 1.5.2 executable",
+test("Pi CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real cross-process rotation", {
+	skip: !piBinary && "set PID_ACP_TEST_PI to a Pi CLI executable",
 	timeout: 30_000,
 }, async (t) => {
 	assert.ok(piBinary);
@@ -379,10 +380,6 @@ test("Pi 1.5.2 CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real 
 			PI_CODING_AGENT_DIR: f.dir,
 		},
 	};
-	assert.equal(
-		(await exec(piBinary, ["--version"], options)).stdout.trim(),
-		"1.5.2",
-	);
 	// Add a marker only to the Pi-side config to identify which process dispatched a request.
 	await writeFile(
 		join(f.dir, "mcp.json"),
@@ -399,12 +396,10 @@ test("Pi 1.5.2 CLI bootstraps and reauthorizes; Pi and pid-acp serialize a real 
 		JSON.stringify({ mcpServers: { [name]: f.entry } }),
 	);
 	const adapter = async () =>
-		new McpAdapter(
-			await loadMcpConfig(
-				{ path: acpConfig, required: true },
-				{ PID_ACP_MCP_AUTH_FILE: f.authFile },
-			),
-		);
+		new McpAdapter({
+			...(await loadMcpConfig({ path: acpConfig, required: true })),
+			oauthFile: f.authFile,
+		});
 	async function login() {
 		const pending = exec(
 			piBinary as string,

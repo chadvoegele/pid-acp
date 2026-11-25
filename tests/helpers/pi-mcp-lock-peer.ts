@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
 
-// Independent reproduction of Pi 1.5.2's lock targets and in-place file transaction.
+// Independent reproduction of Pi's lock targets and in-place file transaction.
 const [authFile, kind] = process.argv.slice(2);
 const key = "mcp__project_docs|https://mcp.example.test/api";
 const hash = createHash("sha256").update(key).digest("hex").slice(0, 16);

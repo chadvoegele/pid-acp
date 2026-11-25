@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
 	mcpNamespace,
 	validateMcpServerConfig,
@@ -250,21 +249,7 @@ function normalizeConfig(
 			issues.push({ server: name, message: error.message });
 		}
 	}
-	if (!servers.some((server) => server.kind === "http" && server.config.oauth))
-		return { servers, issues };
-	const oauthFile =
-		env.PID_ACP_MCP_AUTH_FILE ??
-		join(homedir(), ".pi", "agent", "mcp-auth.json");
-	if (
-		!isAbsolute(oauthFile) ||
-		resolve(oauthFile) !== oauthFile ||
-		basename(oauthFile) !== "mcp-auth.json" ||
-		oauthFile.includes("\0")
-	)
-		rejectConfig(
-			"PID_ACP_MCP_AUTH_FILE must be the absolute canonical path to Pi's live mcp-auth.json.",
-		);
-	return { servers, issues, oauthFile };
+	return { servers, issues };
 }
 
 export async function loadMcpConfig(

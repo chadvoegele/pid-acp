@@ -10,21 +10,12 @@ import {
 import { isSecureMcpOAuthUrl, type PublicMcpOAuth } from "./mcp-config.js";
 import { McpOAuthStoreError, piMcpStore } from "./mcp-oauth-store.js";
 
-const reasons = {
-	client:
-		"OAuth state is not for a supported pre-registered public client; check the Pi and pid-acp client configuration",
-	store:
-		"Pi OAuth store is invalid or inaccessible; check PID_ACP_MCP_AUTH_FILE, permissions and server identity",
-	busy: "Pi OAuth refresh lock is busy; let the other refresher finish",
-	refresh:
-		"OAuth refresh failed; check the authorization server and public client configuration",
-} as const;
-export type McpOAuthFailure = keyof typeof reasons | "login";
+export type McpOAuthFailure = "client" | "store" | "busy" | "refresh" | "login";
 
 // pi-mcp's refresh flow otherwise treats a failed token save as a sign-in fallback.
 class RefreshSaveError extends OAuthError {
 	constructor() {
-		super("pid_acp_store_error", reasons.store);
+		super("pid_acp_store_error", "Could not save Pi OAuth state");
 	}
 }
 class UnsupportedClientError extends Error {}
@@ -42,12 +33,6 @@ export function oauthFailure(error: unknown): McpOAuthFailure | undefined {
 		error instanceof McpAuthRequiredError
 	)
 		return "login";
-}
-
-export function oauthGuidance(name: string, failure: McpOAuthFailure) {
-	return failure === "login"
-		? `OAuth sign-in required; stop all refreshers and run \`pi mcp login ${name}\` as the service user, then restart pid-acp`
-		: `${reasons[failure]}, then restart pid-acp`;
 }
 
 export function piMcpAuthProvider(

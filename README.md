@@ -70,10 +70,6 @@ export default createProvider({
 });
 ```
 
-### MCP OAuth
-
-For a Streamable HTTP server, a service operator can sign in with Pi CLI 1.5.2 and let pid-acp reuse and refresh that grant. See [MCP OAuth setup](docs/mcp-oauth.md) for a headless example, compatibility limits, and the required stop-before-reauthorizing procedure.
-
 ### User extension sketch
 
 Set `PID_ACP_EXTENSIONS='["/absolute/path/to/todo.mts"]'`.

@@ -28,6 +28,7 @@ test("configuration requires a provider config and a literal model ID", () => {
 		modelId: "faux-1",
 		thinkingLevel: "off",
 		extensionPaths: [],
+		mcpAuthFile: join(homedir(), ".pi", "agent", "mcp-auth.json"),
 		mcpConfig: {
 			path: join(homedir(), ".pi", "agent", "mcp.json"),
 			required: false,
@@ -37,6 +38,26 @@ test("configuration requires a provider config and a literal model ID", () => {
 			skillsDir: join(homedir(), ".agents", "skills"),
 		},
 	});
+});
+
+test("MCP auth file selection is independent of the server config", () => {
+	const path = "/fixture/agent/mcp-auth.json";
+	assert.equal(
+		readConfig({ ...env, PID_ACP_MCP_CONFIG: "", PID_ACP_MCP_AUTH_FILE: path })
+			.mcpAuthFile,
+		path,
+	);
+	for (const invalid of [
+		"",
+		"mcp-auth.json",
+		`${path}/`,
+		"/fixture/copied.json",
+	]) {
+		assert.throws(
+			() => readConfig({ ...env, PID_ACP_MCP_AUTH_FILE: invalid }),
+			/PID_ACP_MCP_AUTH_FILE/,
+		);
+	}
 });
 
 test("provider paths accept a nonempty JSON array and preserve order and repeated paths", () => {

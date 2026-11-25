@@ -30,9 +30,9 @@ const name = "project-docs";
 const url = "https://mcp.example.test/api";
 const key = `mcp__project_docs|${url}`;
 const other = `mcp__other|${url}`;
-// Equivalent synthetic shape to Pi 1.5.2 CLI login with a configured clientId.
+// Equivalent synthetic shape to Pi CLI login with a configured clientId.
 const fixture = await readFile(
-	new URL("./fixtures/pi-1.5.2-mcp-auth.json", import.meta.url),
+	new URL("./fixtures/pi-mcp-auth.json", import.meta.url),
 	"utf8",
 );
 const sentinel = "fake-private-value";

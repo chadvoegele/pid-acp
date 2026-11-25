@@ -201,7 +201,7 @@ test("unsupported active features fail actionably; disabled entries and inert ex
 	);
 });
 
-test("HTTP OAuth opts into a literal public client and a separate live Pi file", async (t) => {
+test("HTTP OAuth opts into a literal public client", async (t) => {
 	const f = await fixture(t);
 	const oauth = {
 		clientId: "public-fixture",
@@ -211,45 +211,7 @@ test("HTTP OAuth opts into a literal public client and a separate live Pi file",
 	};
 	const entry = { url: "https://example.test/mcp", oauth };
 	const config = { mcpServers: { "fixture-docs": entry } };
-	const authFile = join(f.root, "mcp-auth.json");
-	const env = { PI_CODING_AGENT_DIR: "/not-used" };
-	assert.equal(
-		(await f.load(config, env)).oauthFile,
-		join(homedir(), ".pi", "agent", "mcp-auth.json"),
-	);
-	const loaded = await f.load(config, {
-		...env,
-		PID_ACP_MCP_AUTH_FILE: authFile,
-	});
-	assert.deepEqual(loaded.servers[0]?.config.oauth, oauth);
-	assert.equal(loaded.oauthFile, authFile);
-	for (const invalid of [
-		"",
-		"mcp-auth.json",
-		`${authFile}/`,
-		join(f.root, "copied.json"),
-	]) {
-		await assert.rejects(
-			f.load(config, { PID_ACP_MCP_AUTH_FILE: invalid }),
-			/PID_ACP_MCP_AUTH_FILE/,
-		);
-		assert.equal(
-			(
-				await f.load(
-					{
-						mcpServers: {
-							plain: {
-								url: entry.url,
-								headers: { Authorization: "Bearer fixture" },
-							},
-						},
-					},
-					{ PID_ACP_MCP_AUTH_FILE: invalid },
-				)
-			).oauthFile,
-			undefined,
-		);
-	}
+	assert.deepEqual((await f.load(config)).servers[0]?.config.oauth, oauth);
 	for (const invalid of [
 		{ ...entry, url: "http://example.test/mcp" },
 		{ ...entry, url: "https://user:SECRET@example.test/mcp" },

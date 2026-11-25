@@ -21,7 +21,10 @@ try {
 		config.thinkingLevel,
 		config.resources,
 		config.sessionsDir,
-		await loadMcpConfig(config.mcpConfig),
+		{
+			...(await loadMcpConfig(config.mcpConfig)),
+			oauthFile: config.mcpAuthFile,
+		},
 		config.extensionPaths,
 	);
 	if (config.socketPath === undefined) await serve(runtime);

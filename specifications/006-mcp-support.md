@@ -133,7 +133,7 @@ confidential/dynamic clients, client metadata documents, issuer overrides, custo
 auth providers, Authorization header conflicts, enabled namespace aliases that
 involve OAuth, and non-loopback cleartext OAuth endpoints.
 
-Use the actual private Pi 1.5.2 named store at `PID_ACP_MCP_AUTH_FILE` or
+Use the actual private Pi named store at `PID_ACP_MCP_AUTH_FILE` or
 `~/.pi/agent/mcp-auth.json`, keyed by namespace and normalized URL. Never migrate
 URL-only records. Require a renewable bearer grant. The operator must bootstrap
 with the same name, URL, and client ID; Pi does not normally record a configured
@@ -145,7 +145,7 @@ Supply tokens from the store without expiry refresh; delegate challenge recovery
 to pi-mcp using redirect-rejecting fetch for discovery and token requests. Keep
 refreshes serialized using Pi-compatible locks. No browser flow in pid-acp.
 Give safe login/restart guidance on missing or revoked authorization, distinct
-from store/configuration, lock or other transport failures. See [operator setup](../docs/mcp-oauth.md).
+from store/configuration, lock or other transport failures.
 
 ### Fixed setup and discovery
 

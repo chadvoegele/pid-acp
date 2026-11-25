@@ -154,7 +154,6 @@ async function privateStoreExists(authFile: string, directory: string) {
 	}
 }
 
-/** Use Pi 1.5.2's live file, not a copy. Quiesce all refreshers before external login/logout. */
 export function piMcpStore(
 	authFile: string,
 	name: string,
