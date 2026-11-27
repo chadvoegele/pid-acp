@@ -104,6 +104,7 @@ try {
 	await writeFile(join(cwd, "right.txt"), right);
 	client = await startClient({
 		live: true,
+		inheritPidAcpEnv: true,
 		cwd,
 		env: { PID_ACP_SESSIONS_DIR: join(cwd, "sessions") },
 	});

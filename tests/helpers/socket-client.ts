@@ -1,3 +1,4 @@
+import { fixtureEnvironment } from "./environment.ts";
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
 import { EventEmitter, once } from "node:events";
@@ -25,7 +26,7 @@ export async function socketFixture(t: TestContext) {
 		const child = fork("dist/main.js", [], {
 			execArgv: ["--import", "./tests/helpers/socket-observer.ts"],
 			env: {
-				...process.env,
+				...fixtureEnvironment(),
 				PID_ACP_PROVIDERS: resolve("tests/helpers/socket-provider.ts"),
 				PID_ACP_MODEL: "faux-1",
 				PID_ACP_SOCKET_PATH: path,

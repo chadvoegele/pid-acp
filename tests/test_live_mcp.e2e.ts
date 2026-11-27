@@ -108,6 +108,7 @@ async function configure(tools: string, token = stdioToken) {
 async function openClient() {
 	const client = await startClient({
 		live: true,
+		inheritPidAcpEnv: true,
 		env: {
 			PID_ACP_MCP_CONFIG: config,
 			PID_ACP_SESSIONS_DIR: join(root, "sessions"),

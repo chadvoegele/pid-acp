@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -58,11 +59,16 @@ test("rapid and active-model cancellation each allow a subsequent prompt", {
 	timeout: 15000,
 }, async () => {
 	const cwd = await mkdtemp(join(tmpdir(), "pid-acp-model-"));
-	const client = await startClient({ cwd });
+	const started = join(cwd, "model-started");
+	const client = await startClient({
+		cwd,
+		env: { PID_TEST_MODEL_STARTED: started },
+	});
 	try {
-		for (const wait of [0, 100, 0]) {
+		for (const waitForModel of [false, true, false]) {
+			await rm(started, { force: true });
 			const prompt = client.prompt("model-block");
-			if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+			if (waitForModel) await waitFor(() => existsSync(started));
 			const start = Date.now();
 			await client.cancel();
 			assert.equal((await prompt).stopReason, "cancelled");

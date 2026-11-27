@@ -24,7 +24,7 @@ async function runAttempt(attempt: number) {
 	let client: Awaited<ReturnType<typeof startClient>> | undefined;
 	const checks: object[] = [];
 	try {
-		client = await startClient({ live: true, cwd });
+		client = await startClient({ live: true, inheritPidAcpEnv: true, cwd });
 		const active = client;
 		assert.deepEqual(client.initialize._meta?.steering, { supported: true });
 		const sessionId = client.session?.sessionId;

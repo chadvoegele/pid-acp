@@ -147,7 +147,7 @@ async function performOperation(
 }
 
 try {
-	client = await startClient({ live: true, cwd });
+	client = await startClient({ live: true, inheritPidAcpEnv: true, cwd });
 	// The token is available only through an actual filesystem read.
 	const token = randomUUID();
 	await writeFile(join(cwd, "seed.txt"), `first\n${token}\nlast\n`);

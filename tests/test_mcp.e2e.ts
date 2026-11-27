@@ -1,3 +1,4 @@
+import { fixtureEnvironment } from "./helpers/environment.ts";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -174,7 +175,7 @@ test("production startup preserves only sanitized MCP configuration categories a
 		await writeFile(path, source, { mode: 0o600 });
 		const child = spawnSync(process.execPath, ["dist/main.js"], {
 			env: {
-				...process.env,
+				...fixtureEnvironment(),
 				PID_ACP_PROVIDERS: resolve("tests/helpers/mcp-provider.ts"),
 				PID_ACP_MODEL: "faux-1",
 				PID_ACP_MCP_CONFIG: path,

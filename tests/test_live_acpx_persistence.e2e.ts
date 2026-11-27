@@ -130,6 +130,7 @@ test("real Qwen interrupted bash resumes through Durable without repeating its e
 	shellPid = undefined;
 	const recovery = await startClient({
 		live: true,
+		inheritPidAcpEnv: true,
 		env: { PID_ACP_SESSIONS_DIR: f.sessions },
 	});
 	try {

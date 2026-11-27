@@ -23,7 +23,7 @@ const cwd = await mkdtemp(join(tmpdir(), "pid-live-thinking-"));
 let client: Awaited<ReturnType<typeof startClient>> | undefined;
 const started = Date.now();
 try {
-	client = await startClient({ live: true, cwd });
+	client = await startClient({ live: true, inheritPidAcpEnv: true, cwd });
 	assert.equal(
 		(
 			await client.prompt(

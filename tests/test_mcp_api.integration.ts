@@ -1,3 +1,4 @@
+import { fixtureEnvironment } from "./helpers/environment.ts";
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
 import { once } from "node:events";
@@ -14,7 +15,7 @@ test("published MCP discovery/registry replacement precedes unattached recovery;
 	function start(phase: string) {
 		const child = fork("tests/helpers/mcp-api-proof.ts", [root, phase], {
 			stdio: ["ignore", "pipe", "pipe", "ipc"],
-			env: { ...process.env, PID_ACP_MCP_CONFIG: "" },
+			env: { ...fixtureEnvironment(), PID_ACP_MCP_CONFIG: "" },
 		});
 		const exited = once(child, "exit");
 		let stderr = "";

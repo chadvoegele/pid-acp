@@ -1,3 +1,4 @@
+import { fixtureEnvironment } from "./helpers/environment.ts";
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
 import { once } from "node:events";
@@ -25,7 +26,7 @@ async function shutdownStdioServer(
 	const child = fork("tests/helpers/shutdown-stdio-server.ts", {
 		silent: true,
 		env: {
-			...process.env,
+			...fixtureEnvironment(),
 			PID_ACP_MCP_CONFIG: "",
 			PID_ACP_SESSIONS_DIR: sessions,
 			...env,

@@ -140,6 +140,7 @@ test("live production shared harness isolates conversations and recovers unattac
 	const launch = async () => {
 		const client = await startClient({
 			live: true,
+			inheritPidAcpEnv: true,
 			env: { PID_ACP_SESSIONS_DIR: sessions },
 			onUpdate(id, update) {
 				const updates = byId.get(id) ?? [];

@@ -1,3 +1,4 @@
+import { fixtureEnvironment } from "./environment.ts";
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
@@ -80,7 +81,7 @@ export async function acpxFixture(t: TestContext, live = false) {
 			],
 			{
 				env: {
-					...process.env,
+					...(live ? process.env : fixtureEnvironment()),
 					PID_ACP_MCP_CONFIG: "",
 					PID_ACP_INSTRUCTIONS: "",
 					PID_ACP_SKILLS_DIR: "",

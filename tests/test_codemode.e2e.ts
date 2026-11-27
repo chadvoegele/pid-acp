@@ -1,3 +1,4 @@
+import { fixtureEnvironment } from "./helpers/environment.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -246,7 +247,7 @@ test("fresh production process resumes codemode without ACP input and later load
 	const log = join(f.root, "recovery-requests");
 	const recovery = spawn(process.execPath, ["dist/main.js"], {
 		env: {
-			...process.env,
+			...fixtureEnvironment(),
 			PID_ACP_PROVIDERS: resolve("tests/helpers/persistence-provider.ts"),
 			PID_ACP_MODEL: "faux-1",
 			PID_ACP_THINKING: "off",

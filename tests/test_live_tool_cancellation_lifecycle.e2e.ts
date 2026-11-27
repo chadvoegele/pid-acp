@@ -86,7 +86,7 @@ async function assertStopped(pids: number[]) {
 	}
 }
 try {
-	client = await startClient({ live: true, cwd });
+	client = await startClient({ live: true, inheritPidAcpEnv: true, cwd });
 	let started = Date.now();
 	assert.equal(
 		(
@@ -220,7 +220,7 @@ try {
 	});
 	await client.close();
 
-	client = await startClient({ live: true, cwd });
+	client = await startClient({ live: true, inheritPidAcpEnv: true, cwd });
 	started = Date.now();
 	const pending = client.prompt(shellPrompt).catch((error) => error);
 	const eofChildren = await waitForSleep(client, pending);
