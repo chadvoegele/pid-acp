@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 import { createModels } from "@earendil-works/pi-ai/models";
 import {
 	type FauxResponseFactory,
@@ -29,6 +30,8 @@ const respond: FauxResponseFactory = async (transcript, options) => {
 			`simulated provider failure ${process.env.PID_ACP_API_KEY ?? ""}`,
 		);
 	if (input.includes("model-block")) {
+		const started = process.env.PID_TEST_MODEL_STARTED;
+		if (started) await writeFile(started, "");
 		await new Promise((_resolve, reject) => {
 			if (options?.signal?.aborted) return reject(new Error("aborted"));
 			options?.signal?.addEventListener(

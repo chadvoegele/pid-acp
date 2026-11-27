@@ -146,6 +146,7 @@ async function runScenario(mode: "defaults" | "instructions" | "skills") {
 			);
 		client = await startClient({
 			live: true,
+			inheritPidAcpEnv: true,
 			cwd,
 			env: {
 				HOME: home,

@@ -1,3 +1,4 @@
+import { fixtureEnvironment } from "./environment.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -26,12 +27,14 @@ import { readText, type WireMessage } from "./updates.ts";
 
 export async function startClient({
 	live = false,
+	inheritPidAcpEnv = false,
 	cwd,
 	env = {},
 	executable = process.execPath,
 	onUpdate,
 }: {
 	live?: boolean;
+	inheritPidAcpEnv?: boolean;
 	cwd?: string;
 	env?: NodeJS.ProcessEnv;
 	executable?: string;
@@ -42,7 +45,7 @@ export async function startClient({
 		[live ? "dist/main.js" : "tests/helpers/faux-server.ts"],
 		{
 			env: {
-				...process.env,
+				...(inheritPidAcpEnv ? process.env : fixtureEnvironment()),
 				PID_ACP_MCP_CONFIG: "",
 				PID_ACP_INSTRUCTIONS: "",
 				PID_ACP_SKILLS_DIR: "",

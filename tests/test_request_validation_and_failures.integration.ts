@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { McpServer } from "@agentclientprotocol/sdk";
 import { readStatus } from "./helpers/updates.ts";
 import { test } from "node:test";
@@ -5,14 +6,18 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { startClient } from "./helpers/client.ts";
+import { startClient, waitFor } from "./helpers/client.ts";
 
 test("explicit errors, creation races, overlap, provider failure and failed shell", {
 	timeout: 15000,
 }, async () => {
 	const cwd = await mkdtemp(join(tmpdir(), "pid-acp-errors-"));
+	const started = join(cwd, "model-started");
 	const client = await startClient({
-		env: { PID_ACP_API_KEY: "never-print-this-test-key" },
+		env: {
+			PID_ACP_API_KEY: "never-print-this-test-key",
+			PID_TEST_MODEL_STARTED: started,
+		},
 	});
 	try {
 		assert.equal(client.initialize.agentCapabilities?.loadSession, false);
@@ -65,7 +70,7 @@ test("explicit errors, creation races, overlap, provider failure and failed shel
 			/text/,
 		);
 		const blocked = client.prompt("model-block", sessionId);
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await waitFor(() => existsSync(started));
 		const independent = await create(cwd);
 		assert.equal(
 			(await client.prompt("independent", independent.sessionId)).stopReason,
