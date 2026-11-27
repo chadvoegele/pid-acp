@@ -6,6 +6,7 @@ import { createModels, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { Models, Provider } from "@earendil-works/pi-ai/models";
 import { MODEL_THINKING_LEVELS } from "@earendil-works/pi-ai/providers/model-schema";
 import type { McpConfigPath } from "./mcp-config.js";
+import { withCodexOverloadMessage } from "./provider-errors.js";
 import type { ResourcePaths } from "./resources.js";
 import { UserExtensionError } from "./user-extensions.js";
 
@@ -164,6 +165,9 @@ export async function configureModels({
 	modelId,
 }: Config) {
 	const models = createModels();
+	models.streamSimple = withCodexOverloadMessage(
+		models.streamSimple.bind(models),
+	);
 	// Provider modules are trusted executable code selected by the operator.
 	for (const [index, path] of providerPaths.entries()) {
 		try {

@@ -14,6 +14,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { EventBridge, createHistoryUpdates } from "./events.js";
 import { logger } from "./logger.js";
+import { PROVIDER_OVERLOADED_MESSAGE } from "./provider-errors.js";
 import type { Session } from "./session.js";
 
 type Sink = (update: SessionUpdate) => Promise<void>;
@@ -220,6 +221,12 @@ export class Adapter {
 			if (this.session.failed) throw new Error("Session storage failed.");
 			return { stopReason: "cancelled" as const };
 		}
+		if (
+			result.status === "unanswered" &&
+			result.reason === "model_error" &&
+			result.detail === PROVIDER_OVERLOADED_MESSAGE
+		)
+			throw new RequestError(-32603, PROVIDER_OVERLOADED_MESSAGE);
 		if (result.status !== "done")
 			throw new Error("Provider or Durable run failed.");
 		return { stopReason: "end_turn" as const };
