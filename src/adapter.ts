@@ -214,7 +214,6 @@ export class Adapter {
 		this.attachment.context.abortSignal?.throwIfAborted();
 		if (this.session.failed) throw new Error("Session storage failed.");
 		if (result.status === "unanswered" && result.reason === "aborted") {
-			// Capture-only boundary: never join a future watch callback or native tail.
 			if (request.cancellationSends) await request.cancellationSends;
 			this.attachment.context.abortSignal?.throwIfAborted();
 			if (this.session.failed) throw new Error("Session storage failed.");
