@@ -36,7 +36,7 @@ for (const failure of ["provider", "environment"] as const) {
 				if (user?.content === "A") {
 					callsA++;
 					if (failure === "provider")
-						throw new Error("PRIVATE_PROVIDER_FAILURE");
+						throw new Error("Simulated provider failure");
 					const last = request.messages.at(-1);
 					if (last?.role === "toolResult") {
 						assert.equal(last.isError, true);
@@ -87,11 +87,10 @@ for (const failure of ["provider", "environment"] as const) {
 		await enteredB.promise;
 		if (failure === "environment") await rm(aCwd, { recursive: true });
 		if (failure === "provider") {
-			await assert.rejects(
-				prompt(adapterA, a.id, "A"),
-				(error: Error) =>
-					/Prompt failed/.test(error.message) && !/PRIVATE/.test(error.message),
-			);
+			await assert.rejects(prompt(adapterA, a.id, "A"), {
+				code: -32603,
+				message: "Simulated provider failure",
+			});
 		} else {
 			assert.equal((await prompt(adapterA, a.id, "A")).stopReason, "end_turn");
 			assert.equal(existsSync(join(aCwd, "must-not-exist")), false);

@@ -25,9 +25,15 @@ const respond: FauxResponseFactory = async (transcript, options) => {
 	}
 	const input = JSON.stringify(last?.content ?? "");
 	if (input.includes("provider-error"))
-		throw new Error(
-			`simulated provider failure ${process.env.PID_ACP_API_KEY ?? ""}`,
-		);
+		return fauxAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "Simulated provider failure. Try again later.",
+		});
+	if (input.includes("provider-blank"))
+		return fauxAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "  ",
+		});
 	if (input.includes("model-block")) {
 		await new Promise((_resolve, reject) => {
 			if (options?.signal?.aborted) return reject(new Error("aborted"));

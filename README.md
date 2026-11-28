@@ -53,6 +53,8 @@ PID_ACP_PROVIDERS=/provider.mts PID_ACP_MODEL=example-model node dist/main.js
 
 Each trusted module default-exports one Pi AI provider. To load more than one, set `PID_ACP_PROVIDERS='["/provider.mts","/other.mts"]'`. For duplicate provider IDs, the last module wins.
 
+Model failure messages are sent to the requesting ACP client. Use a trusted client and consider who can read errors that it republishes, such as in a shared chat.
+
 Example `provider.mts`:
 
 ```ts
