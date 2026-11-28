@@ -214,12 +214,18 @@ export class Adapter {
 		this.attachment.context.abortSignal?.throwIfAborted();
 		if (this.session.failed) throw new Error("Session storage failed.");
 		if (result.status === "unanswered" && result.reason === "aborted") {
-			// Capture-only boundary: never join a future watch callback or native tail.
 			if (request.cancellationSends) await request.cancellationSends;
 			this.attachment.context.abortSignal?.throwIfAborted();
 			if (this.session.failed) throw new Error("Session storage failed.");
 			return { stopReason: "cancelled" as const };
 		}
+		if (
+			result.status === "unanswered" &&
+			result.reason === "model_error" &&
+			typeof result.detail === "string" &&
+			result.detail.trim().length > 0
+		)
+			throw new RequestError(-32603, result.detail);
 		if (result.status !== "done")
 			throw new Error("Provider or Durable run failed.");
 		return { stopReason: "end_turn" as const };

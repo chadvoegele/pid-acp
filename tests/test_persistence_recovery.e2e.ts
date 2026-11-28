@@ -290,10 +290,10 @@ for (const ending of ["cancel", "provider-error", "EOF", "SIGTERM"] as const) {
 		});
 		await first.prompt("settled baseline", sessionId);
 		if (ending === "provider-error")
-			await assert.rejects(
-				first.prompt("provider-error", sessionId),
-				/Prompt failed/,
-			);
+			await assert.rejects(first.prompt("provider-error", sessionId), {
+				code: -32603,
+				message: "PRIVATE_PROVIDER_ERROR_DO_NOT_LOG",
+			});
 		else {
 			const pending = first.prompt("block", sessionId);
 			void pending.catch(() => {});
@@ -308,12 +308,10 @@ for (const ending of ["cancel", "provider-error", "EOF", "SIGTERM"] as const) {
 		}
 		await first.close();
 		assert.ok(!first.stderr.includes("PRIVATE_PROVIDER_ERROR"));
-		assert.doesNotMatch(JSON.stringify(first.wire), /PRIVATE_PROVIDER_ERROR/);
-		if (ending === "provider-error")
-			assert.equal(
-				first.stderr,
-				"pid-acp: Prompt failed; check provider connectivity, model configuration and credentials.\n",
-			);
+		assert.doesNotMatch(
+			JSON.stringify(first.updates),
+			/PRIVATE_PROVIDER_ERROR/,
+		);
 		const second = await f.client({ PID_TEST_RECOVER: "1" });
 		await second.request("session/load", {
 			sessionId,

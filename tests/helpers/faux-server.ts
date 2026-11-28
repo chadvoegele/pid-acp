@@ -26,9 +26,15 @@ const respond: FauxResponseFactory = async (transcript, options) => {
 	}
 	const input = JSON.stringify(last?.content ?? "");
 	if (input.includes("provider-error"))
-		throw new Error(
-			`simulated provider failure ${process.env.PID_ACP_API_KEY ?? ""}`,
-		);
+		return fauxAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "Simulated provider failure. Try again later.",
+		});
+	if (input.includes("provider-blank"))
+		return fauxAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "  ",
+		});
 	if (input.includes("model-block")) {
 		const started = process.env.PID_TEST_MODEL_STARTED;
 		if (started) await writeFile(started, "");

@@ -78,10 +78,15 @@ test("explicit errors, creation races, overlap, provider failure and failed shel
 		);
 		await client.cancel(sessionId);
 		assert.equal((await blocked).stopReason, "cancelled");
-		await assert.rejects(
-			client.prompt("provider-error", sessionId),
-			/Prompt failed/,
-		);
+		await assert.rejects(client.prompt("provider-error", sessionId), {
+			code: -32603,
+			message: "Simulated provider failure. Try again later.",
+		});
+		await assert.rejects(client.prompt("provider-blank", sessionId), {
+			code: -32603,
+			message:
+				"Prompt failed. Check server diagnostics and provider configuration.",
+		});
 		assert.ok(!client.stderr.includes("never-print-this-test-key"));
 		assert.ok(
 			!JSON.stringify(client.wire).includes("never-print-this-test-key"),
